@@ -187,13 +187,13 @@ function setupCopyButton(toolbar: HTMLDivElement, code: HTMLElement, pre: HTMLPr
 function isEligible(pre: HTMLPreElement): boolean {
   if (pre.hasAttribute(ENHANCED_ATTR)) return false;
   if (pre.hasAttribute(NO_COPY_ATTR)) return false;
-  if (!pre.querySelector(':scope > code')) return false;
+  if (!pre.querySelector('code')) return false;
   if (isInEditorDOM(pre)) return false;
   return true;
 }
 
 function enhanceCodeBlock(pre: HTMLPreElement): void {
-  const code = pre.querySelector<HTMLElement>(':scope > code');
+  const code = pre.querySelector<HTMLElement>('code');
   if (!code) return;
 
   const toolbar = document.createElement('div');
