@@ -344,6 +344,22 @@ export function createCodeBlockExtended(): { mount(): void; unmount(): void } {
               continue;
             }
 
+            // Prism 内側 div が後から追加されたケース: ラベルが既にある場合にツールバー位置を調整
+            if (el.tagName === 'DIV' && m.target.nodeType === Node.ELEMENT_NODE) {
+              const pendingPre = (m.target as Element).closest<HTMLPreElement>(`pre[${ENHANCED_ATTR}]`);
+              if (pendingPre) {
+                const refs = blockRefs.get(pendingPre);
+                if (refs && refs.filenameLabel && refs.codeWrap === pendingPre && el.querySelector('code')) {
+                  refs.codeWrap = el as HTMLElement;
+                  requestAnimationFrame(() => {
+                    if (blockRefs.has(pendingPre)) {
+                      refs.toolbar.style.top = `calc(${refs.codeWrap.offsetTop}px + 0.4rem)`;
+                    }
+                  });
+                }
+              }
+            }
+
             if (
               (el.tagName === 'PRE' && !el.hasAttribute(ENHANCED_ATTR)) ||
               el.querySelector(`pre:not([${ENHANCED_ATTR}])`)
