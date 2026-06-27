@@ -93,14 +93,14 @@ pre.gpcb-enhanced .code-highlighted-title {
   display: block;
   width: fit-content;
   max-width: calc(100% - 3rem); /* コピーボタン幅を考慮 */
-  padding: 0.2em 0.7em;
+  padding: 6px 12px;
   margin: 0 0 -0.5rem 0;
   font-family: var(--bs-font-monospace, ui-monospace, SFMono-Regular, monospace);
   font-size: 0.75rem;
   line-height: 1.4;
   color: rgba(255, 255, 255, 0.75);
   background: rgb(40, 44, 52);
-  border-radius: 0.3em;
+  border-radius: 0.3em 0.3em 0 0;
   user-select: none;
   pointer-events: none;
   white-space: nowrap;

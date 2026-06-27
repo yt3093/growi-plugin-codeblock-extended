@@ -27,6 +27,7 @@ type CopyBtnState = 'copy' | 'ok' | 'fail';
 
 interface BlockRefs {
   toolbar: HTMLDivElement;
+  codeWrap: HTMLElement;
   filenameLabel: HTMLSpanElement | null;
   copyBtn: HTMLButtonElement | null;
   copyHandler: ((e: MouseEvent) => void) | null;
@@ -219,16 +220,24 @@ function enhanceCodeBlock(pre: HTMLPreElement): void {
   const code = pre.querySelector<HTMLElement>('code');
   if (!code) return;
 
+  // コピーボタンはファイル名ラベルと独立させるため、code の親要素（Prism 内側 div）に配置する
+  const codeWrap = (code.parentElement !== null && code.parentElement !== pre)
+    ? code.parentElement
+    : pre;
+
   const toolbar = document.createElement('div');
   toolbar.className = 'gpcb-toolbar';
 
-  blockRefs.set(pre, { toolbar, filenameLabel: null, copyBtn: null, copyHandler: null });
+  blockRefs.set(pre, { toolbar, codeWrap, filenameLabel: null, copyBtn: null, copyHandler: null });
 
   setupCopyButton(toolbar, code, pre);
 
   pre.classList.add('gpcb-enhanced');
-  pre.prepend(toolbar);
-  setupFilenameLabel(pre);  // toolbar の後に prepend → DOM 順: [filename, toolbar, 元の中身]
+
+  if (codeWrap !== pre) codeWrap.style.position = 'relative';
+  codeWrap.appendChild(toolbar);
+
+  setupFilenameLabel(pre);
   pre.setAttribute(ENHANCED_ATTR, '1');
 }
 
@@ -241,6 +250,7 @@ function cleanupBlock(pre: HTMLPreElement): void {
     }
     refs.filenameLabel?.remove();
     refs.toolbar.remove();
+    if (refs.codeWrap !== pre) refs.codeWrap.style.position = '';
     blockRefs.delete(pre);
   }
   pre.classList.remove('gpcb-enhanced');
