@@ -1,1 +1,1 @@
-# growi-plugin-codebrock-extended
+# growi-plugin-codeblock-extended

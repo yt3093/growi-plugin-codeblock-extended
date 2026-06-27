@@ -1,0 +1,99 @@
+/* GROWIのPrism/Shikiハイライトはインラインスタイルでダーク背景を強制するため
+   ボタンはダーク背景前提で設計し、半透明の白で統一する */
+:root {
+  --gpcb-btn-color:        rgba(255, 255, 255, 0.55);
+  --gpcb-btn-bg:           rgba(255, 255, 255, 0.08);
+  --gpcb-btn-color-hover:  rgba(255, 255, 255, 0.9);
+  --gpcb-btn-bg-hover:     rgba(255, 255, 255, 0.18);
+  --gpcb-copy-ok-color:    #4ade80;
+  --gpcb-copy-fail-color:  #f87171;
+  --gpcb-badge-fill:       rgba(20, 22, 28, 0.85);
+}
+
+/* pre にポジションコンテキストを付与 */
+pre.gpcb-enhanced {
+  position: relative;
+}
+
+/* toolbar: デフォルト非表示 */
+.gpcb-toolbar {
+  position: absolute;
+  top: 0.4rem;
+  right: 0.4rem;
+  display: flex;
+  align-items: center;
+  z-index: 1;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+}
+
+/* ホバー時・フォーカス時のみ表示 */
+pre.gpcb-enhanced:hover .gpcb-toolbar,
+pre.gpcb-enhanced:focus-within .gpcb-toolbar {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* copy button */
+[data-gpcb-copy-btn] {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 5px;
+  width: 30px;
+  height: 30px;
+  border: none;
+  border-radius: 6px;
+  background-color: var(--gpcb-btn-bg);
+  color: var(--gpcb-btn-color);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+[data-gpcb-copy-btn]:hover {
+  background-color: var(--gpcb-btn-bg-hover);
+  color: var(--gpcb-btn-color-hover);
+}
+
+[data-gpcb-copy-btn]:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.4);
+  outline-offset: 2px;
+}
+
+/* コピー成功・失敗のカラーフィードバック */
+[data-gpcb-copy-btn].gpcb-copy-ok {
+  color: var(--gpcb-copy-ok-color);
+}
+
+[data-gpcb-copy-btn].gpcb-copy-fail {
+  color: var(--gpcb-copy-fail-color);
+}
+
+/* コピー成功・失敗中はマウスが外れても toolbar を維持 */
+pre.gpcb-enhanced:has([data-gpcb-copy-btn].gpcb-copy-ok) .gpcb-toolbar,
+pre.gpcb-enhanced:has([data-gpcb-copy-btn].gpcb-copy-fail) .gpcb-toolbar {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* ✓ バッジの塗りつぶし（背後のクリップボードアイコンを隠す） */
+[data-gpcb-copy-btn] .gpcb-copy-badge-bg {
+  fill: var(--gpcb-badge-fill);
+}
+
+/* prefers-reduced-motion: トランジション無効 */
+@media (prefers-reduced-motion: reduce) {
+  .gpcb-toolbar,
+  [data-gpcb-copy-btn] {
+    transition: none;
+  }
+}
+
+/* Print: toolbar を非表示 */
+@media print {
+  .gpcb-toolbar {
+    display: none;
+  }
+}
