@@ -37,11 +37,11 @@ pre.gpcb-enhanced:focus-within .gpcb-toolbar {
 }
 
 /* ファイル名ラベルがある場合: ツールバーをコードブロック本体の上端に固定
-   12px = ラベルの上下 padding (6px × 2)
+   6px  = ラベルの上 padding のみ（下 padding 20px はコードブロックの裏に隠れる）
    1.05rem = ラベルのテキスト高さ (0.75rem × line-height 1.4)
    0.4rem = コードブロック内の標準オフセット */
 pre.gpcb-enhanced:has(> .gpcb-filename) .gpcb-toolbar {
-  top: calc(12px + 1.05rem + 0.4rem);
+  top: calc(6px + 1.05rem + 0.4rem);
 }
 
 /* copy button */
@@ -102,8 +102,8 @@ pre.gpcb-enhanced .code-highlighted-title {
   display: block;
   width: fit-content;
   max-width: calc(100% - 3rem); /* コピーボタン幅を考慮 */
-  padding: 6px 12px;
-  margin: 0 0 -0.5rem 0;
+  padding: 6px 12px 20px;
+  margin: 0 0 calc(-20px - 0.5rem) 0; /* 下 padding 分コードブロックを引き上げ、裏に潜り込ませる */
   font-family: var(--bs-font-monospace, ui-monospace, SFMono-Regular, monospace);
   font-size: 0.75rem;
   line-height: 1.4;
