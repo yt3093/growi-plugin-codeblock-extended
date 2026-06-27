@@ -27,7 +27,6 @@ type CopyBtnState = 'copy' | 'ok' | 'fail';
 
 interface BlockRefs {
   toolbar: HTMLDivElement;
-  codeWrap: HTMLElement;
   filenameLabel: HTMLSpanElement | null;
   copyBtn: HTMLButtonElement | null;
   copyHandler: ((e: MouseEvent) => void) | null;
@@ -220,31 +219,16 @@ function enhanceCodeBlock(pre: HTMLPreElement): void {
   const code = pre.querySelector<HTMLElement>('code');
   if (!code) return;
 
-  // code の親要素（Prism 内側 div）を取得。ラベルとボタンの独立配置に使用
-  const codeWrap = (code.parentElement !== null && code.parentElement !== pre)
-    ? code.parentElement
-    : pre;
-
   const toolbar = document.createElement('div');
   toolbar.className = 'gpcb-toolbar';
 
-  blockRefs.set(pre, { toolbar, codeWrap, filenameLabel: null, copyBtn: null, copyHandler: null });
+  blockRefs.set(pre, { toolbar, filenameLabel: null, copyBtn: null, copyHandler: null });
 
   setupCopyButton(toolbar, code, pre);
 
   pre.classList.add('gpcb-enhanced');
   pre.prepend(toolbar);
   setupFilenameLabel(pre);
-
-  // ラベルがある場合: RAF でレイアウト確定後にツールバー top をコードブロック上端へ合わせる
-  if (blockRefs.get(pre)?.filenameLabel && codeWrap !== pre) {
-    requestAnimationFrame(() => {
-      if (blockRefs.has(pre)) {
-        toolbar.style.top = `calc(${codeWrap.offsetTop}px + 0.4rem)`;
-      }
-    });
-  }
-
   pre.setAttribute(ENHANCED_ATTR, '1');
 }
 
@@ -256,7 +240,6 @@ function cleanupBlock(pre: HTMLPreElement): void {
       refs.copyBtn.removeEventListener('click', refs.copyHandler);
     }
     refs.filenameLabel?.remove();
-    refs.toolbar.style.top = '';
     refs.toolbar.remove();
     blockRefs.delete(pre);
   }
@@ -324,40 +307,10 @@ export function createCodeBlockExtended(): { mount(): void; unmount(): void } {
               if (parentPre) {
                 const refs = blockRefs.get(parentPre);
                 if (refs && !refs.filenameLabel) {
-                  // enhance 時は Prism 内側 div がまだなく codeWrap = pre だった場合、ここで再取得
-                  if (refs.codeWrap === parentPre) {
-                    const currentCode = parentPre.querySelector<HTMLElement>('code');
-                    if (currentCode?.parentElement && currentCode.parentElement !== parentPre) {
-                      refs.codeWrap = currentCode.parentElement;
-                    }
-                  }
                   setupFilenameLabel(parentPre);
-                  if (refs.filenameLabel && refs.codeWrap !== parentPre) {
-                    requestAnimationFrame(() => {
-                      if (blockRefs.has(parentPre)) {
-                        refs.toolbar.style.top = `calc(${refs.codeWrap.offsetTop}px + 0.4rem)`;
-                      }
-                    });
-                  }
                 }
               }
               continue;
-            }
-
-            // Prism 内側 div が後から追加されたケース: ラベルが既にある場合にツールバー位置を調整
-            if (el.tagName === 'DIV' && m.target.nodeType === Node.ELEMENT_NODE) {
-              const pendingPre = (m.target as Element).closest<HTMLPreElement>(`pre[${ENHANCED_ATTR}]`);
-              if (pendingPre) {
-                const refs = blockRefs.get(pendingPre);
-                if (refs && refs.filenameLabel && refs.codeWrap === pendingPre && el.querySelector('code')) {
-                  refs.codeWrap = el as HTMLElement;
-                  requestAnimationFrame(() => {
-                    if (blockRefs.has(pendingPre)) {
-                      refs.toolbar.style.top = `calc(${refs.codeWrap.offsetTop}px + 0.4rem)`;
-                    }
-                  });
-                }
-              }
             }
 
             if (
