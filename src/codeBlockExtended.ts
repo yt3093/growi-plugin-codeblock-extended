@@ -324,8 +324,29 @@ export function createCodeBlockExtended(): { mount(): void; unmount(): void } {
           for (const node of Array.from(m.addedNodes)) {
             if (node.nodeType !== Node.ELEMENT_NODE) continue;
             const el = node as Element;
-            // プラグイン自身が追加した toolbar / lang label は無視して無限ループを防ぐ
+            // プラグイン自身が追加した toolbar / filename label は無視して無限ループを防ぐ
             if (el.classList?.contains('gpcb-toolbar') || el.classList?.contains(FILENAME_CLASS)) continue;
+
+            // GROWI が enhance 済み <pre> に後から <cite class="code-highlighted-title"> を追加するケース
+            // （enhance 時点で cite がなく setupFilenameLabel が空振りした場合の救済）
+            if (m.target.nodeType === Node.ELEMENT_NODE && el.matches?.(GROWI_FILENAME_SELECTOR)) {
+              const parentPre = (m.target as Element).closest<HTMLPreElement>(`pre[${ENHANCED_ATTR}]`);
+              if (parentPre) {
+                const refs = blockRefs.get(parentPre);
+                if (refs && !refs.filenameLabel) {
+                  setupFilenameLabel(parentPre);
+                  if (refs.filenameLabel && refs.codeWrap !== parentPre) {
+                    requestAnimationFrame(() => {
+                      if (blockRefs.has(parentPre)) {
+                        refs.toolbar.style.top = `calc(${refs.codeWrap.offsetTop}px + 0.4rem)`;
+                      }
+                    });
+                  }
+                }
+              }
+              continue;
+            }
+
             if (
               (el.tagName === 'PRE' && !el.hasAttribute(ENHANCED_ATTR)) ||
               el.querySelector(`pre:not([${ENHANCED_ATTR}])`)
