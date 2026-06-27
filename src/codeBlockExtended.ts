@@ -28,8 +28,6 @@ type CopyBtnState = 'copy' | 'ok' | 'fail';
 interface BlockRefs {
   toolbar: HTMLDivElement;
   codeWrap: HTMLElement;
-  codeWrapOriginalBorderRadius: string;
-  pendingBorderRadiusFix: boolean;
   filenameLabel: HTMLSpanElement | null;
   copyBtn: HTMLButtonElement | null;
   copyHandler: ((e: MouseEvent) => void) | null;
@@ -185,15 +183,7 @@ function setupFilenameLabel(pre: HTMLPreElement): void {
   pre.prepend(label);
 
   const refs = blockRefs.get(pre);
-  if (refs) {
-    refs.filenameLabel = label;
-    if (refs.codeWrap !== pre) {
-      refs.codeWrap.style.borderRadius = '0 0.3em 0.3em 0.3em';
-    } else {
-      // codeWrap がまだ <pre> のフォールバック → Prism 内側 div が後から追加されたときに適用
-      refs.pendingBorderRadiusFix = true;
-    }
-  }
+  if (refs) refs.filenameLabel = label;
 }
 
 function setupCopyButton(toolbar: HTMLDivElement, code: HTMLElement, pre: HTMLPreElement): void {
@@ -238,8 +228,7 @@ function enhanceCodeBlock(pre: HTMLPreElement): void {
   const toolbar = document.createElement('div');
   toolbar.className = 'gpcb-toolbar';
 
-  const codeWrapOriginalBorderRadius = codeWrap !== pre ? codeWrap.style.borderRadius : '';
-  blockRefs.set(pre, { toolbar, codeWrap, codeWrapOriginalBorderRadius, pendingBorderRadiusFix: false, filenameLabel: null, copyBtn: null, copyHandler: null });
+  blockRefs.set(pre, { toolbar, codeWrap, filenameLabel: null, copyBtn: null, copyHandler: null });
 
   setupCopyButton(toolbar, code, pre);
 
@@ -269,9 +258,6 @@ function cleanupBlock(pre: HTMLPreElement): void {
     refs.filenameLabel?.remove();
     refs.toolbar.style.top = '';
     refs.toolbar.remove();
-    if (refs.codeWrap !== pre) {
-      refs.codeWrap.style.borderRadius = refs.codeWrapOriginalBorderRadius;
-    }
     blockRefs.delete(pre);
   }
   pre.classList.remove('gpcb-enhanced');
@@ -343,7 +329,6 @@ export function createCodeBlockExtended(): { mount(): void; unmount(): void } {
                     const currentCode = parentPre.querySelector<HTMLElement>('code');
                     if (currentCode?.parentElement && currentCode.parentElement !== parentPre) {
                       refs.codeWrap = currentCode.parentElement;
-                      refs.codeWrapOriginalBorderRadius = refs.codeWrap.style.borderRadius;
                     }
                   }
                   setupFilenameLabel(parentPre);
@@ -357,25 +342,6 @@ export function createCodeBlockExtended(): { mount(): void; unmount(): void } {
                 }
               }
               continue;
-            }
-
-            // Prism 内側 div が後から追加されたケース（pendingBorderRadiusFix の解消）
-            if (el.tagName === 'DIV' && m.target.nodeType === Node.ELEMENT_NODE) {
-              const pendingPre = (m.target as Element).closest<HTMLPreElement>(`pre[${ENHANCED_ATTR}]`);
-              if (pendingPre) {
-                const refs = blockRefs.get(pendingPre);
-                if (refs?.pendingBorderRadiusFix && el.querySelector('code')) {
-                  refs.codeWrap = el as HTMLElement;
-                  refs.codeWrapOriginalBorderRadius = (el as HTMLElement).style.borderRadius;
-                  refs.codeWrap.style.borderRadius = '0 0.3em 0.3em 0.3em';
-                  refs.pendingBorderRadiusFix = false;
-                  requestAnimationFrame(() => {
-                    if (blockRefs.has(pendingPre)) {
-                      refs.toolbar.style.top = `calc(${refs.codeWrap.offsetTop}px + 0.4rem)`;
-                    }
-                  });
-                }
-              }
             }
 
             if (
