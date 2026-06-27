@@ -226,7 +226,7 @@ function enhanceCodeBlock(pre: HTMLPreElement): void {
   const code = pre.querySelector<HTMLElement>('code');
   if (!code) return;
 
-  // コピーボタンはファイル名ラベルと独立させるため、code の親要素（Prism 内側 div）に配置する
+  // code の親要素（Prism 内側 div）を取得。ラベルとボタンの独立配置に使用
   const codeWrap = (code.parentElement !== null && code.parentElement !== pre)
     ? code.parentElement
     : pre;
@@ -240,11 +240,18 @@ function enhanceCodeBlock(pre: HTMLPreElement): void {
   setupCopyButton(toolbar, code, pre);
 
   pre.classList.add('gpcb-enhanced');
-
-  if (codeWrap !== pre) codeWrap.style.position = 'relative';
-  codeWrap.appendChild(toolbar);
-
+  pre.prepend(toolbar);
   setupFilenameLabel(pre);
+
+  // ラベルがある場合: RAF でレイアウト確定後にツールバー top をコードブロック上端へ合わせる
+  if (blockRefs.get(pre)?.filenameLabel && codeWrap !== pre) {
+    requestAnimationFrame(() => {
+      if (blockRefs.has(pre)) {
+        toolbar.style.top = `calc(${codeWrap.offsetTop}px + 0.4rem)`;
+      }
+    });
+  }
+
   pre.setAttribute(ENHANCED_ATTR, '1');
 }
 
@@ -256,9 +263,9 @@ function cleanupBlock(pre: HTMLPreElement): void {
       refs.copyBtn.removeEventListener('click', refs.copyHandler);
     }
     refs.filenameLabel?.remove();
+    refs.toolbar.style.top = '';
     refs.toolbar.remove();
     if (refs.codeWrap !== pre) {
-      refs.codeWrap.style.position = '';
       refs.codeWrap.style.borderRadius = refs.codeWrapOriginalBorderRadius;
     }
     blockRefs.delete(pre);
