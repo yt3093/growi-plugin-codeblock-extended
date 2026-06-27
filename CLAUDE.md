@@ -10,8 +10,8 @@
 
 | 機能 | 説明 |
 |---|---|
-| コピーボタン | コードブロック右上にボタンを常時表示。クリックで `<code>` の `textContent` をクリップボードにコピー |
-| 成功/失敗フィードバック | コピー成功時: 2 秒間 ✓ バッジ + 緑フラッシュ。失敗時: ✕ アイコン + 赤フラッシュ |
+| コピーボタン | コードブロック右上にボタンを**ホバー時のみ表示**（Zenn 風 UI）。クリックで `<code>` の `textContent` をクリップボードにコピー |
+| 成功/失敗フィードバック | コピー成功時: 2 秒間 ✓ バッジ + アイコン緑変化。失敗時: ✕ アイコン赤変化（2 秒後に元に戻る） |
 | `navigator.clipboard` 非対応 | ボタンを非生成（早期 return） |
 | opt-out 属性 | `<pre data-no-copy>` でコピーボタンを非表示（ソート等は無関係） |
 | 非表示条件 | 編集モード（`/edit`, `#edit`, `body.editing`, `body.grw-editor-mode`, `body.modal-open`）・管理画面（`/admin`）・印刷時はボタン非表示 |
@@ -69,7 +69,7 @@ growi-plugin-codeblock-extended/
 - **`isEligible(pre)`**: 以下をすべて満たすもののみ対象
   - `data-gpcb-enhanced` 属性が未付与
   - `data-no-copy` 属性が未付与
-  - `:scope > code` 要素を持つ
+  - `pre.querySelector('code')` が存在する（**直下子ではなく子孫を検索**。GROWI の Prism が `<pre>` と `<code>` の間に `<div>` を挿入するため `:scope > code` は不可）
   - `isInEditorDOM(pre)` が false（`.CodeMirror` / `.cm-editor` / `[contenteditable="true"]` 配下でない）
   - `isHiddenContext()` が false
 
@@ -145,7 +145,21 @@ hljs / Prism のシンタックスハイライトは `<code>` 内部に `<span c
 
 Edit → View 遷移で `location.hash` のみが変わる場合、`pushState` のモンキーパッチは発火しない。`hashchange` イベントの購読が必須。
 
-### 8. コピーボタンの `clearTimeout` を cleanupBlock で必ず呼ぶ
+### 8. `:scope > code` は GROWI で機能しない
+
+GROWI のシンタックスハイライト（Prism 系）は `<pre>` と `<code>` の間にインラインスタイル付きの `<div>` を挿入する:
+
+```html
+<pre>
+  <div style="background: rgb(40, 44, 52); padding: 1em; ...">
+    <code class="language-python">...</code>
+  </div>
+</pre>
+```
+
+`:scope > code` は直下子のみにマッチするため常に `null` を返す。**必ず `querySelector('code')` を使うこと**。
+
+### 9. コピーボタンの `clearTimeout` を cleanupBlock で必ず呼ぶ
 
 2 秒フィードバックのタイマーが残った状態で `unmount()` が呼ばれると、タイマー発火後に削除済みボタンへ `classList.remove` 等が走り例外が起きる恐れがある。`blockRefs.copyTimerId` を `cleanupBlock` 内で `window.clearTimeout` してから `blockRefs.delete(pre)` すること。
 
@@ -164,7 +178,7 @@ GROWI 管理画面 `/admin/plugins` で **削除 → 再インストール**。
 
 1. `pnpm build` が成功し `dist/manifest.json` が出力される
 2. GROWI で削除 → 再インストール後、DevTools Network で `client-entry-*.js` が 200 で取得される
-3. コードブロック付きページを開くとコードブロック右上にコピーボタンが表示される
+3. コードブロック付きページを開き、`<pre>` にマウスオーバーするとコピーボタンが右上に表示される
 4. ボタンクリックでコード全体がクリップボードにコピーされる（`<code>` の textContent 完全一致）
 5. コピー成功時に 2 秒間 ✓ アイコン + 緑フラッシュが表示される
 6. クリップボード API が拒否された場合は ✕ アイコン + 赤フラッシュが表示される
