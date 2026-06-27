@@ -83,43 +83,47 @@ pre.gpcb-enhanced:has([data-gpcb-copy-btn].gpcb-copy-fail) .gpcb-toolbar {
   fill: var(--gpcb-badge-fill);
 }
 
-/* 言語ラベル帯: <pre> の先頭で block 表示、コードを押し下げる */
-.gpcb-lang {
-  display: block;
-  padding: 0.35em 0.8em;
+/* GROWI デフォルトのファイル名ラベルを非表示（enhanced な pre のみ） */
+pre.gpcb-enhanced .code-highlighted-title {
+  display: none;
+}
+
+/* ファイル名ラベル: 左上密着・小サイズ */
+.gpcb-filename {
+  position: absolute;
+  top: 0.5em;
+  left: 0;
+  z-index: 1;
+  display: inline-block;
+  padding: 0.15em 0.6em;
   margin: 0;
   font-family: var(--bs-font-monospace, ui-monospace, SFMono-Regular, monospace);
-  font-size: 0.72rem;
+  font-size: 0.7rem;
   line-height: 1.5;
-  color: rgba(255, 255, 255, 0.55);
-  background: rgba(40, 44, 52, 0.95);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  letter-spacing: 0.04em;
+  color: rgba(255, 255, 255, 0.75);
+  background: rgb(40, 44, 52);
+  border-top-left-radius: 0.3em;
+  border-bottom-right-radius: 0.3em;
   user-select: none;
+  pointer-events: none;
+  max-width: calc(100% - 1em);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  border-top-left-radius: inherit;
-  border-top-right-radius: inherit;
-}
-
-pre.gpcb-enhanced:hover .gpcb-lang {
-  color: rgba(255, 255, 255, 0.85);
 }
 
 /* prefers-reduced-motion: トランジション無効 */
 @media (prefers-reduced-motion: reduce) {
   .gpcb-toolbar,
-  [data-gpcb-copy-btn],
-  .gpcb-lang {
+  [data-gpcb-copy-btn] {
     transition: none;
   }
 }
 
-/* Print: toolbar / lang label を非表示 */
+/* Print: toolbar / filename label を非表示 */
 @media print {
   .gpcb-toolbar,
-  .gpcb-lang {
+  .gpcb-filename {
     display: none;
   }
 }

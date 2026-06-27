@@ -10,7 +10,7 @@
 
 | 機能 | 説明 |
 |---|---|
-| 言語ラベル | コードブロック上部に独立したラベル帯として常時表示。`language-*` クラスから抽出し、既知言語は整形名（例: `TypeScript`）、未知はクラス名そのまま。`data-no-lang` で opt-out |
+| ファイル名ラベル | `言語:ファイル名` 記法時のみ、コードブロック左上に小サイズで密着表示。GROWI デフォルトの `<cite class="code-highlighted-title">` は CSS で非表示にして置き換える。`data-no-filename` で opt-out |
 | コピーボタン | コードブロック右上にボタンを**ホバー時のみ表示**（Zenn 風 UI）。クリックで `<code>` の `textContent` をクリップボードにコピー |
 | 成功/失敗フィードバック | コピー成功時: 2 秒間 ✓ バッジ + アイコン緑変化。失敗時: ✕ アイコン赤変化（2 秒後に元に戻る） |
 | `navigator.clipboard` 非対応 | ボタンを非生成（早期 return） |
@@ -71,14 +71,14 @@ growi-plugin-codeblock-extended/
   - `pre.querySelector('code')` が存在する（**直下子ではなく子孫を検索**。GROWI の Prism が `<pre>` と `<code>` の間に `<div>` を挿入するため `:scope > code` は不可）
   - `isInEditorDOM(pre)` が false（`.CodeMirror` / `.cm-editor` / `[contenteditable="true"]` 配下でない）
   - `isHiddenContext()` が false
-  - 各機能の opt-out（`data-no-copy` / `data-no-lang`）は機能ごとの setup 関数内で確認するため、`isEligible` では判定しない
+  - 各機能の opt-out（`data-no-copy` / `data-no-filename`）は機能ごとの setup 関数内で確認するため、`isEligible` では判定しない
 
 - **`enhanceCodeBlock(pre)`**: コーディネータ
   1. `<div class="gpcb-toolbar">` を生成
-  2. `blockRefs.set(pre, { toolbar, langLabel: null, copyBtn: null, copyHandler: null })` で WeakMap に登録
+  2. `blockRefs.set(pre, { toolbar, filenameLabel: null, copyBtn: null, copyHandler: null })` で WeakMap に登録
   3. `setupCopyButton(toolbar, code, pre)` — `navigator.clipboard.writeText` が利用可能かつ `data-no-copy` がなければボタンを生成
   4. `pre.classList.add('gpcb-enhanced')`、`pre.prepend(toolbar)`
-  5. `setupLangLabel(pre, code)` — `data-no-lang` がなく `language-*` クラスがあればラベル帯を prepend（DOM 順: [lang, toolbar, 元の中身]）
+  5. `setupFilenameLabel(pre)` — `data-no-filename` がなく `<cite class="code-highlighted-title">` が存在すれば、その textContent を `<span class="gpcb-filename">` として prepend（DOM 順: [filename, toolbar, 元の中身]）
   6. `pre.setAttribute('data-gpcb-enhanced', '1')`
 
 - **`handleCopyClick(code, btn, pre)`**: `code.textContent ?? ''` を `navigator.clipboard.writeText` に渡す。成功時は `flashCopyState(btn, 'ok', pre)`、失敗時は `flashCopyState(btn, 'fail', pre)` を呼ぶ。
@@ -87,11 +87,11 @@ growi-plugin-codeblock-extended/
 
 - **`setCopyBtnState(btn, state)`**: ボタンの子要素を全削除してから `COPY_BTN_STATE_MAP` のアイコン生成関数を呼び、結果を `appendChild`。`innerHTML` は使わない。
 
-- **`cleanupBlock(pre)`**: `blockRefs.get(pre)` から `copyTimerId`（`clearTimeout`）・`copyHandler`（`removeEventListener`）・`toolbar`（`.remove()`）を取り出してクリーンアップ。`gpcb-enhanced` クラスと `data-gpcb-enhanced` 属性を削除。`<code>` の中身は一切変更しない。
+- **`cleanupBlock(pre)`**: `blockRefs.get(pre)` から `copyTimerId`（`clearTimeout`）・`copyHandler`（`removeEventListener`）・`filenameLabel`（`.remove()`）・`toolbar`（`.remove()`）を取り出してクリーンアップ。`gpcb-enhanced` クラスと `data-gpcb-enhanced` 属性を削除。`<code>` の中身は一切変更しない。`<cite class="code-highlighted-title">` は DOM から削除しない（CSS `pre.gpcb-enhanced .code-highlighted-title { display: none }` が外れると自動復帰する）。
 
 - **SPA 遷移検知**: `pushState` / `replaceState` にカスタムイベント `'growi-pcb-navigate'` をモンキーパッチ。`popstate` / `hashchange` も購読し、いずれも 2 段 `requestAnimationFrame` で DOM が安定してから `scanAndEnhance()` を実行。
 
-- **MutationObserver**: `document.body` を `childList: true, subtree: true, attributes: true, attributeFilter: ['class']` で監視。追加ノード判定では **`.gpcb-toolbar` を持つ要素はスキップ**して自己追加による無限ループを防ぐ。`body.class` 変化時（編集モード遷移）は `isHiddenContext()` を判定し、true なら全 enhanced `<pre>` を即 `cleanupBlock`、false なら `scheduleScan()`。
+- **MutationObserver**: `document.body` を `childList: true, subtree: true, attributes: true, attributeFilter: ['class']` で監視。追加ノード判定では **`.gpcb-toolbar` および `.gpcb-filename` を持つ要素はスキップ**して自己追加による無限ループを防ぐ。`body.class` 変化時（編集モード遷移）は `isHiddenContext()` を判定し、true なら全 enhanced `<pre>` を即 `cleanupBlock`、false なら `scheduleScan()`。
 
 - **`isHiddenContext()`**: `/admin` / `/admin/*` パス、`#edit` / `/edit` サフィックス、`body.editing` / `body.grw-editor-mode` / `body.modal-open` クラスのいずれかで true を返す。
 
@@ -106,8 +106,8 @@ growi-plugin-codeblock-extended/
 | カスタムイベント名 | `growi-pcb-navigate` |
 | CSS 変数 | `--gpcb-*` |
 | opt-out（コピー） | `data-no-copy` |
-| opt-out（言語ラベル） | `data-no-lang` |
-| 言語ラベル属性 | `data-gpcb-lang` |
+| opt-out（ファイル名ラベル） | `data-no-filename` |
+| ファイル名ラベル属性 | `data-gpcb-filename` |
 | pluginActivators キー | `growi-plugin-codeblock-extended` |
 
 ## ハマりどころ（必読）
@@ -166,6 +166,12 @@ GROWI のシンタックスハイライト（Prism 系）は `<pre>` と `<code>
 ### 9. コピーボタンの `clearTimeout` を cleanupBlock で必ず呼ぶ
 
 2 秒フィードバックのタイマーが残った状態で `unmount()` が呼ばれると、タイマー発火後に削除済みボタンへ `classList.remove` 等が走り例外が起きる恐れがある。`blockRefs.copyTimerId` を `cleanupBlock` 内で `window.clearTimeout` してから `blockRefs.delete(pre)` すること。
+
+### 10. GROWI デフォルトの `<cite class="code-highlighted-title">` を CSS で隠す
+
+GROWI は ` ```言語:ファイル名 ` 記法で `<pre>` の中に `<cite class="code-highlighted-title">ファイル名</cite>` を挿入する。本プラグインはこの `<cite>` の textContent を読み取って独自の `<span class="gpcb-filename">` を生成し、元の `<cite>` を CSS `pre.gpcb-enhanced .code-highlighted-title { display: none }` で非表示にする。
+
+DOM ノード自体は残すこと（`cite.remove()` などはしない）。`unmount()` で `pre.gpcb-enhanced` クラスが外れれば CSS スコープが解除され、GROWI デフォルト表示に自動復帰する。
 
 ## デプロイ手順
 
