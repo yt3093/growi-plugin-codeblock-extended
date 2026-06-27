@@ -334,6 +334,14 @@ export function createCodeBlockExtended(): { mount(): void; unmount(): void } {
               if (parentPre) {
                 const refs = blockRefs.get(parentPre);
                 if (refs && !refs.filenameLabel) {
+                  // enhance 時は Prism 内側 div がまだなく codeWrap = pre だった場合、ここで再取得
+                  if (refs.codeWrap === parentPre) {
+                    const currentCode = parentPre.querySelector<HTMLElement>('code');
+                    if (currentCode?.parentElement && currentCode.parentElement !== parentPre) {
+                      refs.codeWrap = currentCode.parentElement;
+                      refs.codeWrapOriginalBorderRadius = refs.codeWrap.style.borderRadius;
+                    }
+                  }
                   setupFilenameLabel(parentPre);
                   if (refs.filenameLabel && refs.codeWrap !== parentPre) {
                     requestAnimationFrame(() => {
