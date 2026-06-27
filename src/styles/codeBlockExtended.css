@@ -91,7 +91,7 @@ pre.gpcb-enhanced .code-highlighted-title {
 /* ファイル名ラベル: 左上密着・小サイズ */
 .gpcb-filename {
   position: absolute;
-  top: 0.5em;
+  top: 0;
   left: 0;
   z-index: 1;
   display: inline-block;
