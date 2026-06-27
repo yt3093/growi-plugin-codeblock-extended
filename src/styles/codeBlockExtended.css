@@ -15,10 +15,11 @@ pre.gpcb-enhanced {
   position: relative;
 }
 
-/* toolbar: デフォルト非表示 */
+/* toolbar: デフォルト非表示
+   top: Prism 内側 div の margin-top (0.5em) + コードブロック内オフセット (0.4rem) */
 .gpcb-toolbar {
   position: absolute;
-  top: 0.4rem;
+  top: calc(0.5em + 0.4rem);
   right: 0.4rem;
   display: flex;
   align-items: center;
