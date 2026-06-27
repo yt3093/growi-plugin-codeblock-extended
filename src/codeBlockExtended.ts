@@ -183,7 +183,11 @@ function setupFilenameLabel(pre: HTMLPreElement): void {
   pre.prepend(label);
 
   const refs = blockRefs.get(pre);
-  if (refs) refs.filenameLabel = label;
+  if (refs) {
+    refs.filenameLabel = label;
+    // ラベルとの連続感のためコードブロック左上の角丸を解除（Prism インラインスタイルを上書き）
+    if (refs.codeWrap !== pre) refs.codeWrap.style.borderTopLeftRadius = '0';
+  }
 }
 
 function setupCopyButton(toolbar: HTMLDivElement, code: HTMLElement, pre: HTMLPreElement): void {
@@ -250,7 +254,10 @@ function cleanupBlock(pre: HTMLPreElement): void {
     }
     refs.filenameLabel?.remove();
     refs.toolbar.remove();
-    if (refs.codeWrap !== pre) refs.codeWrap.style.position = '';
+    if (refs.codeWrap !== pre) {
+      refs.codeWrap.style.position = '';
+      refs.codeWrap.style.borderTopLeftRadius = '';
+    }
     blockRefs.delete(pre);
   }
   pre.classList.remove('gpcb-enhanced');
