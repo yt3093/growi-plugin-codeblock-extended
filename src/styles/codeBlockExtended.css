@@ -1,30 +1,13 @@
-/* Default (light mode) variables */
+/* GROWIのPrism/Shikiハイライトはインラインスタイルでダーク背景を強制するため
+   ボタンはダーク背景前提で設計し、半透明の白で統一する */
 :root {
-  --gpcb-toolbar-bg: rgba(255, 255, 255, 0.88);
-  --gpcb-btn-color: #495057;
-  --gpcb-btn-border: #ced4da;
-  --gpcb-btn-bg: #ffffff;
-  --gpcb-copy-badge-bg: #ffffff;
-}
-
-/* Dark mode variables: OS setting */
-@media (prefers-color-scheme: dark) {
-  :root {
-    --gpcb-toolbar-bg: rgba(30, 30, 30, 0.88);
-    --gpcb-btn-color: #dee2e6;
-    --gpcb-btn-border: #555;
-    --gpcb-btn-bg: #2b2b2b;
-    --gpcb-copy-badge-bg: #2b2b2b;
-  }
-}
-
-/* Dark mode variables: GROWI UI toggle (Bootstrap 5.3) */
-html[data-bs-theme="dark"] {
-  --gpcb-toolbar-bg: rgba(30, 30, 30, 0.88);
-  --gpcb-btn-color: #dee2e6;
-  --gpcb-btn-border: #555;
-  --gpcb-btn-bg: #2b2b2b;
-  --gpcb-copy-badge-bg: #2b2b2b;
+  --gpcb-btn-color:        rgba(255, 255, 255, 0.55);
+  --gpcb-btn-bg:           rgba(255, 255, 255, 0.08);
+  --gpcb-btn-color-hover:  rgba(255, 255, 255, 0.9);
+  --gpcb-btn-bg-hover:     rgba(255, 255, 255, 0.18);
+  --gpcb-copy-ok-color:    #4ade80;
+  --gpcb-copy-fail-color:  #f87171;
+  --gpcb-badge-fill:       rgba(20, 22, 28, 0.85);
 }
 
 /* pre にポジションコンテキストを付与 */
@@ -32,20 +15,24 @@ pre.gpcb-enhanced {
   position: relative;
 }
 
-/* toolbar: pre の右上に絶対配置 */
+/* toolbar: デフォルト非表示 */
 .gpcb-toolbar {
   position: absolute;
-  top: 0.35rem;
-  right: 0.35rem;
+  top: 0.4rem;
+  right: 0.4rem;
   display: flex;
   align-items: center;
-  gap: 4px;
   z-index: 1;
-  background-color: var(--gpcb-toolbar-bg);
-  border-radius: 4px;
-  padding: 2px;
-  backdrop-filter: blur(2px);
-  -webkit-backdrop-filter: blur(2px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+}
+
+/* ホバー時・フォーカス時のみ表示 */
+pre.gpcb-enhanced:hover .gpcb-toolbar,
+pre.gpcb-enhanced:focus-within .gpcb-toolbar {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 /* copy button */
@@ -53,60 +40,54 @@ pre.gpcb-enhanced {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 4px;
-  min-width: 26px;
-  min-height: 26px;
-  border: 1px solid var(--gpcb-btn-border);
-  border-radius: 4px;
+  padding: 5px;
+  width: 30px;
+  height: 30px;
+  border: none;
+  border-radius: 6px;
   background-color: var(--gpcb-btn-bg);
   color: var(--gpcb-btn-color);
   cursor: pointer;
   flex-shrink: 0;
-  transition: color 0.15s, border-color 0.15s;
+  transition: background-color 0.15s ease, color 0.15s ease;
 }
 
 [data-gpcb-copy-btn]:hover {
-  border-color: var(--bs-primary, #6a727a);
-  color: var(--bs-primary, #6a727a);
+  background-color: var(--gpcb-btn-bg-hover);
+  color: var(--gpcb-btn-color-hover);
 }
 
 [data-gpcb-copy-btn]:focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--bs-primary, #6a727a) 50%, transparent);
-  outline-offset: 1px;
+  outline: 2px solid rgba(255, 255, 255, 0.4);
+  outline-offset: 2px;
 }
 
-/* ✓ バッジの背景（コピー成功時） */
-[data-gpcb-copy-btn] .gpcb-copy-badge-bg {
-  fill: var(--gpcb-copy-badge-bg);
-}
-
-/* flash animations */
-@keyframes gpcb-copy-bg-flash-ok {
-  0%   { background-color: color-mix(in srgb, var(--bs-success, #198754) 28%, var(--gpcb-btn-bg)); }
-  100% { background-color: var(--gpcb-btn-bg); }
-}
-
-@keyframes gpcb-copy-bg-flash-fail {
-  0%   { background-color: color-mix(in srgb, var(--bs-danger, #dc3545) 28%, var(--gpcb-btn-bg)); }
-  100% { background-color: var(--gpcb-btn-bg); }
-}
-
+/* コピー成功・失敗のカラーフィードバック */
 [data-gpcb-copy-btn].gpcb-copy-ok {
-  color: var(--bs-success, #198754);
-  border-color: var(--bs-success, #198754);
-  animation: gpcb-copy-bg-flash-ok 0.4s ease-out;
+  color: var(--gpcb-copy-ok-color);
 }
 
 [data-gpcb-copy-btn].gpcb-copy-fail {
-  color: var(--bs-danger, #dc3545);
-  border-color: var(--bs-danger, #dc3545);
-  animation: gpcb-copy-bg-flash-fail 0.4s ease-out;
+  color: var(--gpcb-copy-fail-color);
 }
 
+/* コピー成功・失敗中はマウスが外れても toolbar を維持 */
+pre.gpcb-enhanced:has([data-gpcb-copy-btn].gpcb-copy-ok) .gpcb-toolbar,
+pre.gpcb-enhanced:has([data-gpcb-copy-btn].gpcb-copy-fail) .gpcb-toolbar {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* ✓ バッジの塗りつぶし（背後のクリップボードアイコンを隠す） */
+[data-gpcb-copy-btn] .gpcb-copy-badge-bg {
+  fill: var(--gpcb-badge-fill);
+}
+
+/* prefers-reduced-motion: トランジション無効 */
 @media (prefers-reduced-motion: reduce) {
-  [data-gpcb-copy-btn].gpcb-copy-ok,
-  [data-gpcb-copy-btn].gpcb-copy-fail {
-    animation: none;
+  .gpcb-toolbar,
+  [data-gpcb-copy-btn] {
+    transition: none;
   }
 }
 
