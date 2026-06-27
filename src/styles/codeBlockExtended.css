@@ -94,7 +94,7 @@ pre.gpcb-enhanced .code-highlighted-title {
   width: fit-content;
   max-width: calc(100% - 3rem); /* コピーボタン幅を考慮 */
   padding: 0.2em 0.7em;
-  margin: 0;
+  margin: 0 0 -0.5em 0;
   font-family: var(--bs-font-monospace, ui-monospace, SFMono-Regular, monospace);
   font-size: 0.75rem;
   line-height: 1.4;
