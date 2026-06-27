@@ -28,6 +28,7 @@ type CopyBtnState = 'copy' | 'ok' | 'fail';
 interface BlockRefs {
   toolbar: HTMLDivElement;
   codeWrap: HTMLElement;
+  codeWrapOriginalBorderRadius: string;
   filenameLabel: HTMLSpanElement | null;
   copyBtn: HTMLButtonElement | null;
   copyHandler: ((e: MouseEvent) => void) | null;
@@ -185,8 +186,9 @@ function setupFilenameLabel(pre: HTMLPreElement): void {
   const refs = blockRefs.get(pre);
   if (refs) {
     refs.filenameLabel = label;
-    // ラベルとの連続感のためコードブロック左上の角丸を解除（Prism インラインスタイルを上書き）
-    if (refs.codeWrap !== pre) refs.codeWrap.style.borderTopLeftRadius = '0';
+    // ラベルとの連続感のためコードブロック左上の角丸を解除
+    // longhand ではなく shorthand で上書きすることで Prism インラインスタイルに確実に勝つ
+    if (refs.codeWrap !== pre) refs.codeWrap.style.borderRadius = '0 0.3em 0.3em 0.3em';
   }
 }
 
@@ -232,7 +234,8 @@ function enhanceCodeBlock(pre: HTMLPreElement): void {
   const toolbar = document.createElement('div');
   toolbar.className = 'gpcb-toolbar';
 
-  blockRefs.set(pre, { toolbar, codeWrap, filenameLabel: null, copyBtn: null, copyHandler: null });
+  const codeWrapOriginalBorderRadius = codeWrap !== pre ? codeWrap.style.borderRadius : '';
+  blockRefs.set(pre, { toolbar, codeWrap, codeWrapOriginalBorderRadius, filenameLabel: null, copyBtn: null, copyHandler: null });
 
   setupCopyButton(toolbar, code, pre);
 
@@ -256,7 +259,7 @@ function cleanupBlock(pre: HTMLPreElement): void {
     refs.toolbar.remove();
     if (refs.codeWrap !== pre) {
       refs.codeWrap.style.position = '';
-      refs.codeWrap.style.borderTopLeftRadius = '';
+      refs.codeWrap.style.borderRadius = refs.codeWrapOriginalBorderRadius;
     }
     blockRefs.delete(pre);
   }
