@@ -83,17 +83,43 @@ pre.gpcb-enhanced:has([data-gpcb-copy-btn].gpcb-copy-fail) .gpcb-toolbar {
   fill: var(--gpcb-badge-fill);
 }
 
+/* 言語ラベル帯: <pre> の先頭で block 表示、コードを押し下げる */
+.gpcb-lang {
+  display: block;
+  padding: 0.35em 0.8em;
+  margin: 0;
+  font-family: var(--bs-font-monospace, ui-monospace, SFMono-Regular, monospace);
+  font-size: 0.72rem;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.55);
+  background: rgba(40, 44, 52, 0.95);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  letter-spacing: 0.04em;
+  user-select: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  border-top-left-radius: inherit;
+  border-top-right-radius: inherit;
+}
+
+pre.gpcb-enhanced:hover .gpcb-lang {
+  color: rgba(255, 255, 255, 0.85);
+}
+
 /* prefers-reduced-motion: トランジション無効 */
 @media (prefers-reduced-motion: reduce) {
   .gpcb-toolbar,
-  [data-gpcb-copy-btn] {
+  [data-gpcb-copy-btn],
+  .gpcb-lang {
     transition: none;
   }
 }
 
-/* Print: toolbar を非表示 */
+/* Print: toolbar / lang label を非表示 */
 @media print {
-  .gpcb-toolbar {
+  .gpcb-toolbar,
+  .gpcb-lang {
     display: none;
   }
 }

@@ -2,11 +2,36 @@ import './styles/codeBlockExtended.css';
 
 const ENHANCED_ATTR = 'data-gpcb-enhanced';
 const NO_COPY_ATTR = 'data-no-copy';
+const NO_LANG_ATTR = 'data-no-lang';
 const COPY_BTN_ATTR = 'data-gpcb-copy-btn';
+const LANG_LABEL_ATTR = 'data-gpcb-lang';
+const LANG_LABEL_CLASS = 'gpcb-lang';
 const COPY_CLASS_OK = 'gpcb-copy-ok';
 const COPY_CLASS_FAIL = 'gpcb-copy-fail';
 const COPY_FEEDBACK_MS = 2000;
 const SVG_NS = 'http://www.w3.org/2000/svg';
+
+const LANG_DISPLAY_MAP: Record<string, string> = {
+  javascript: 'JavaScript', js: 'JavaScript',
+  typescript: 'TypeScript', ts: 'TypeScript',
+  jsx: 'JSX', tsx: 'TSX',
+  python: 'Python', py: 'Python',
+  ruby: 'Ruby', rb: 'Ruby',
+  java: 'Java', kotlin: 'Kotlin', swift: 'Swift',
+  go: 'Go', rust: 'Rust', rs: 'Rust',
+  cpp: 'C++', 'c++': 'C++', c: 'C', csharp: 'C#', 'c#': 'C#', cs: 'C#',
+  scala: 'Scala', php: 'PHP',
+  html: 'HTML', css: 'CSS', scss: 'SCSS', sass: 'Sass',
+  json: 'JSON', yaml: 'YAML', yml: 'YAML', toml: 'TOML', xml: 'XML',
+  sql: 'SQL',
+  bash: 'Bash', sh: 'Shell', shell: 'Shell', zsh: 'Zsh', fish: 'Fish',
+  powershell: 'PowerShell', ps1: 'PowerShell',
+  markdown: 'Markdown', md: 'Markdown',
+  dockerfile: 'Dockerfile', docker: 'Dockerfile',
+  vim: 'Vim', lua: 'Lua', perl: 'Perl', r: 'R',
+  dart: 'Dart', elixir: 'Elixir', ex: 'Elixir',
+  diff: 'Diff', graphql: 'GraphQL', proto: 'Protobuf',
+};
 
 // GROWI のナビバー要素を検索するセレクタ候補（上から順に試す）
 const NAVBAR_SELECTORS = [
@@ -22,6 +47,7 @@ type CopyBtnState = 'copy' | 'ok' | 'fail';
 
 interface BlockRefs {
   toolbar: HTMLDivElement;
+  langLabel: HTMLSpanElement | null;
   copyBtn: HTMLButtonElement | null;
   copyHandler: ((e: MouseEvent) => void) | null;
   copyTimerId?: number;
@@ -162,7 +188,36 @@ function handleCopyClick(code: HTMLElement, btn: HTMLButtonElement, pre: HTMLPre
 
 // --- setup / enhance / cleanup ---
 
+function getLangFromCode(pre: HTMLPreElement, code: HTMLElement): string | null {
+  const re = /\blanguage-(\S+)/;
+  const m1 = code.className.match(re);
+  if (m1) return m1[1];
+  const m2 = pre.className.match(re);
+  if (m2) return m2[1];
+  return null;
+}
+
+function getLangDisplayName(raw: string): string {
+  return LANG_DISPLAY_MAP[raw.toLowerCase()] ?? raw;
+}
+
+function setupLangLabel(pre: HTMLPreElement, code: HTMLElement): void {
+  if (pre.hasAttribute(NO_LANG_ATTR)) return;
+  const lang = getLangFromCode(pre, code);
+  if (!lang) return;
+
+  const label = document.createElement('span');
+  label.className = LANG_LABEL_CLASS;
+  label.setAttribute(LANG_LABEL_ATTR, lang);
+  label.textContent = getLangDisplayName(lang);
+  pre.prepend(label);
+
+  const refs = blockRefs.get(pre);
+  if (refs) refs.langLabel = label;
+}
+
 function setupCopyButton(toolbar: HTMLDivElement, code: HTMLElement, pre: HTMLPreElement): void {
+  if (pre.hasAttribute(NO_COPY_ATTR)) return;
   if (typeof navigator.clipboard?.writeText !== 'function') return;
 
   const btn = document.createElement('button');
@@ -186,7 +241,6 @@ function setupCopyButton(toolbar: HTMLDivElement, code: HTMLElement, pre: HTMLPr
 
 function isEligible(pre: HTMLPreElement): boolean {
   if (pre.hasAttribute(ENHANCED_ATTR)) return false;
-  if (pre.hasAttribute(NO_COPY_ATTR)) return false;
   if (!pre.querySelector('code')) return false;
   if (isInEditorDOM(pre)) return false;
   return true;
@@ -199,12 +253,13 @@ function enhanceCodeBlock(pre: HTMLPreElement): void {
   const toolbar = document.createElement('div');
   toolbar.className = 'gpcb-toolbar';
 
-  blockRefs.set(pre, { toolbar, copyBtn: null, copyHandler: null });
+  blockRefs.set(pre, { toolbar, langLabel: null, copyBtn: null, copyHandler: null });
 
   setupCopyButton(toolbar, code, pre);
 
   pre.classList.add('gpcb-enhanced');
   pre.prepend(toolbar);
+  setupLangLabel(pre, code);  // toolbar の後に prepend → DOM 順: [lang, toolbar, 元の中身]
   pre.setAttribute(ENHANCED_ATTR, '1');
 }
 
@@ -215,6 +270,7 @@ function cleanupBlock(pre: HTMLPreElement): void {
     if (refs.copyBtn && refs.copyHandler) {
       refs.copyBtn.removeEventListener('click', refs.copyHandler);
     }
+    refs.langLabel?.remove();
     refs.toolbar.remove();
     blockRefs.delete(pre);
   }
@@ -272,8 +328,8 @@ export function createCodeBlockExtended(): { mount(): void; unmount(): void } {
           for (const node of Array.from(m.addedNodes)) {
             if (node.nodeType !== Node.ELEMENT_NODE) continue;
             const el = node as Element;
-            // プラグイン自身が追加した toolbar は無視して無限ループを防ぐ
-            if (el.classList?.contains('gpcb-toolbar')) continue;
+            // プラグイン自身が追加した toolbar / lang label は無視して無限ループを防ぐ
+            if (el.classList?.contains('gpcb-toolbar') || el.classList?.contains(LANG_LABEL_CLASS)) continue;
             if (
               (el.tagName === 'PRE' && !el.hasAttribute(ENHANCED_ATTR)) ||
               el.querySelector(`pre:not([${ENHANCED_ATTR}])`)

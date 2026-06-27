@@ -10,6 +10,7 @@
 
 | 機能 | 説明 |
 |---|---|
+| 言語ラベル | コードブロック上部に独立したラベル帯として常時表示。`language-*` クラスから抽出し、既知言語は整形名（例: `TypeScript`）、未知はクラス名そのまま。`data-no-lang` で opt-out |
 | コピーボタン | コードブロック右上にボタンを**ホバー時のみ表示**（Zenn 風 UI）。クリックで `<code>` の `textContent` をクリップボードにコピー |
 | 成功/失敗フィードバック | コピー成功時: 2 秒間 ✓ バッジ + アイコン緑変化。失敗時: ✕ アイコン赤変化（2 秒後に元に戻る） |
 | `navigator.clipboard` 非対応 | ボタンを非生成（早期 return） |
@@ -27,7 +28,6 @@
 
 | Step | 機能 | opt-out 属性 |
 |---|---|---|
-| Step 2 | 言語ラベル表示（`language-*` クラスから抽出してバッジ表示） | `data-no-lang` |
 | Step 3 | 行番号（`<aside class="gpcb-linenums">` を `<pre>` 内に並置、`<code>` は不変） | `data-no-linenum` |
 | Step 4 | 折りたたみ（行数閾値超過時に max-height 制限 + 展開ボタン） | `data-no-fold` |
 | Step 5 | 全画面（`<dialog>` に `cloneNode(true)` してモーダル表示、Esc で閉じる） | `data-no-full` |
@@ -68,16 +68,18 @@ growi-plugin-codeblock-extended/
 
 - **`isEligible(pre)`**: 以下をすべて満たすもののみ対象
   - `data-gpcb-enhanced` 属性が未付与
-  - `data-no-copy` 属性が未付与
   - `pre.querySelector('code')` が存在する（**直下子ではなく子孫を検索**。GROWI の Prism が `<pre>` と `<code>` の間に `<div>` を挿入するため `:scope > code` は不可）
   - `isInEditorDOM(pre)` が false（`.CodeMirror` / `.cm-editor` / `[contenteditable="true"]` 配下でない）
   - `isHiddenContext()` が false
+  - 各機能の opt-out（`data-no-copy` / `data-no-lang`）は機能ごとの setup 関数内で確認するため、`isEligible` では判定しない
 
 - **`enhanceCodeBlock(pre)`**: コーディネータ
   1. `<div class="gpcb-toolbar">` を生成
-  2. `blockRefs.set(pre, { toolbar, copyBtn: null, copyHandler: null })` で WeakMap に登録
-  3. `setupCopyButton(toolbar, code, pre)` — `navigator.clipboard.writeText` が利用可能な場合のみボタンを生成し `blockRefs` を更新
-  4. `pre.classList.add('gpcb-enhanced')`、`pre.prepend(toolbar)`、`pre.setAttribute('data-gpcb-enhanced', '1')`
+  2. `blockRefs.set(pre, { toolbar, langLabel: null, copyBtn: null, copyHandler: null })` で WeakMap に登録
+  3. `setupCopyButton(toolbar, code, pre)` — `navigator.clipboard.writeText` が利用可能かつ `data-no-copy` がなければボタンを生成
+  4. `pre.classList.add('gpcb-enhanced')`、`pre.prepend(toolbar)`
+  5. `setupLangLabel(pre, code)` — `data-no-lang` がなく `language-*` クラスがあればラベル帯を prepend（DOM 順: [lang, toolbar, 元の中身]）
+  6. `pre.setAttribute('data-gpcb-enhanced', '1')`
 
 - **`handleCopyClick(code, btn, pre)`**: `code.textContent ?? ''` を `navigator.clipboard.writeText` に渡す。成功時は `flashCopyState(btn, 'ok', pre)`、失敗時は `flashCopyState(btn, 'fail', pre)` を呼ぶ。
 
@@ -104,6 +106,8 @@ growi-plugin-codeblock-extended/
 | カスタムイベント名 | `growi-pcb-navigate` |
 | CSS 変数 | `--gpcb-*` |
 | opt-out（コピー） | `data-no-copy` |
+| opt-out（言語ラベル） | `data-no-lang` |
+| 言語ラベル属性 | `data-gpcb-lang` |
 | pluginActivators キー | `growi-plugin-codeblock-extended` |
 
 ## ハマりどころ（必読）
