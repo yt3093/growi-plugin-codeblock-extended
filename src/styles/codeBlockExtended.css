@@ -88,25 +88,21 @@ pre.gpcb-enhanced .code-highlighted-title {
   display: none;
 }
 
-/* ファイル名ラベル: 左上密着・小サイズ */
+/* ファイル名ラベル: コードブロック上部・フロー配置 */
 .gpcb-filename {
-  position: absolute;
-  top: 0;
-  left: 0;
-  z-index: 1;
-  display: inline-block;
-  padding: 0.15em 0.6em;
+  display: block;
+  width: fit-content;
+  max-width: calc(100% - 3rem); /* コピーボタン幅を考慮 */
+  padding: 0.2em 0.7em;
   margin: 0;
   font-family: var(--bs-font-monospace, ui-monospace, SFMono-Regular, monospace);
-  font-size: 0.7rem;
-  line-height: 1.5;
+  font-size: 0.75rem;
+  line-height: 1.4;
   color: rgba(255, 255, 255, 0.75);
   background: rgb(40, 44, 52);
-  border-top-left-radius: 0.3em;
-  border-bottom-right-radius: 0.3em;
+  border-radius: 0.3em;
   user-select: none;
   pointer-events: none;
-  max-width: calc(100% - 1em);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
