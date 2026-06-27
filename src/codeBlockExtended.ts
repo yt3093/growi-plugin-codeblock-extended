@@ -29,6 +29,7 @@ interface BlockRefs {
   toolbar: HTMLDivElement;
   codeWrap: HTMLElement;
   codeWrapOriginalBorderRadius: string;
+  pendingBorderRadiusFix: boolean;
   filenameLabel: HTMLSpanElement | null;
   copyBtn: HTMLButtonElement | null;
   copyHandler: ((e: MouseEvent) => void) | null;
@@ -186,9 +187,12 @@ function setupFilenameLabel(pre: HTMLPreElement): void {
   const refs = blockRefs.get(pre);
   if (refs) {
     refs.filenameLabel = label;
-    // ラベルとの連続感のためコードブロック左上の角丸を解除
-    // longhand ではなく shorthand で上書きすることで Prism インラインスタイルに確実に勝つ
-    if (refs.codeWrap !== pre) refs.codeWrap.style.borderRadius = '0 0.3em 0.3em 0.3em';
+    if (refs.codeWrap !== pre) {
+      refs.codeWrap.style.borderRadius = '0 0.3em 0.3em 0.3em';
+    } else {
+      // codeWrap がまだ <pre> のフォールバック → Prism 内側 div が後から追加されたときに適用
+      refs.pendingBorderRadiusFix = true;
+    }
   }
 }
 
@@ -235,7 +239,7 @@ function enhanceCodeBlock(pre: HTMLPreElement): void {
   toolbar.className = 'gpcb-toolbar';
 
   const codeWrapOriginalBorderRadius = codeWrap !== pre ? codeWrap.style.borderRadius : '';
-  blockRefs.set(pre, { toolbar, codeWrap, codeWrapOriginalBorderRadius, filenameLabel: null, copyBtn: null, copyHandler: null });
+  blockRefs.set(pre, { toolbar, codeWrap, codeWrapOriginalBorderRadius, pendingBorderRadiusFix: false, filenameLabel: null, copyBtn: null, copyHandler: null });
 
   setupCopyButton(toolbar, code, pre);
 
@@ -353,6 +357,25 @@ export function createCodeBlockExtended(): { mount(): void; unmount(): void } {
                 }
               }
               continue;
+            }
+
+            // Prism 内側 div が後から追加されたケース（pendingBorderRadiusFix の解消）
+            if (el.tagName === 'DIV' && m.target.nodeType === Node.ELEMENT_NODE) {
+              const pendingPre = (m.target as Element).closest<HTMLPreElement>(`pre[${ENHANCED_ATTR}]`);
+              if (pendingPre) {
+                const refs = blockRefs.get(pendingPre);
+                if (refs?.pendingBorderRadiusFix && el.querySelector('code')) {
+                  refs.codeWrap = el as HTMLElement;
+                  refs.codeWrapOriginalBorderRadius = (el as HTMLElement).style.borderRadius;
+                  refs.codeWrap.style.borderRadius = '0 0.3em 0.3em 0.3em';
+                  refs.pendingBorderRadiusFix = false;
+                  requestAnimationFrame(() => {
+                    if (blockRefs.has(pendingPre)) {
+                      refs.toolbar.style.top = `calc(${refs.codeWrap.offsetTop}px + 0.4rem)`;
+                    }
+                  });
+                }
+              }
             }
 
             if (
