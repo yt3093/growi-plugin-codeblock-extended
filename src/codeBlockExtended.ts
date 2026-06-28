@@ -352,8 +352,8 @@ export function createCodeBlockExtended(): { mount(): void; unmount(): void } {
               continue;
             }
 
-            // Prism が enhance 済み <pre> に後から内側 div を挿入するケース
-            // （enhance 時点では Prism div が未挿入のため setupLineNumbers が空振りした場合の救済）
+            // Prism が enhance 済み <pre> に後から内側 div を挿入 or 差し替えするケース
+            // （enhance 時点で Prism div が未挿入の場合、および Prism がハイライト適用で div を差し替えた場合の救済）
             if (
               m.target.nodeType === Node.ELEMENT_NODE &&
               (m.target as Element).matches?.(`pre[${ENHANCED_ATTR}]`) &&
@@ -361,7 +361,9 @@ export function createCodeBlockExtended(): { mount(): void; unmount(): void } {
             ) {
               const parentPre = m.target as HTMLPreElement;
               const refs = blockRefs.get(parentPre);
-              if (refs && !refs.lineNums) {
+              // isConnected で旧 aside が DOM から切り離されていないか確認する
+              if (refs && (!refs.lineNums || !refs.lineNums.isConnected)) {
+                refs.lineNums = null;
                 const code = parentPre.querySelector<HTMLElement>('code');
                 if (code) setupLineNumbers(parentPre, code);
               }
