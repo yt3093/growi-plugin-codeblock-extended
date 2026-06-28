@@ -10,11 +10,9 @@
   --gpcb-badge-fill:       rgba(20, 22, 28, 0.85);
 }
 
-/* pre にポジションコンテキストを付与。
-   overflow-x: auto をここに置くことで、スクロールバーが Prism div の角丸に干渉しない */
+/* pre にポジションコンテキストを付与 */
 pre.gpcb-enhanced {
   position: relative;
-  overflow-x: auto;
 }
 
 /* toolbar: デフォルト非表示
@@ -131,6 +129,23 @@ pre.gpcb-enhanced .code-highlighted-title {
 pre.gpcb-enhanced > div {
   display: flex !important;
   align-items: stretch;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.25) transparent;
+}
+
+/* スクロールバートラックを透明にして Prism div の角丸を維持する */
+pre.gpcb-enhanced > div::-webkit-scrollbar {
+  height: 6px;
+}
+
+pre.gpcb-enhanced > div::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+pre.gpcb-enhanced > div::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.25);
+  border-radius: 3px;
 }
 
 /* <code> は flex item として伸縮する */
@@ -148,7 +163,9 @@ pre.gpcb-enhanced > div > code {
   flex: 0 0 auto;
   display: flex;
   flex-direction: column;
+  padding-left: 1em;
   padding-right: 1em;
+  margin-left: -1em;
   margin-right: 0.5em;
   font-family: var(--bs-font-monospace, ui-monospace, SFMono-Regular, monospace);
   font-feature-settings: 'tnum';
