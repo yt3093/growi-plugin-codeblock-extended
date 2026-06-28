@@ -151,6 +151,7 @@ pre.gpcb-enhanced > div > code {
   font-feature-settings: 'tnum';
   text-align: right;
   color: rgba(255, 255, 255, 0.4);
+  background: inherit;
   user-select: none;
   pointer-events: none;
 }
