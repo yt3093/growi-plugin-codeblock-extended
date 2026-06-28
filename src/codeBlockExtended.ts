@@ -15,7 +15,12 @@ const GROWI_FILENAME_SELECTOR = 'cite.code-highlighted-title';
 
 const NO_LINENUM_ATTR = 'data-no-linenum';
 const LINENUMS_CLASS = 'gpcb-linenums';
+const LINENUM_HL_CLASS = 'gpcb-linenum-hl';
 const CODE_WRAP_CLASS = 'gpcb-code-wrap';
+const HL_OVERLAY_CLASS = 'gpcb-hl-overlay';
+const HL_LINE_CLASS = 'gpcb-hl-line';
+const HL_LINE_HL_CLASS = 'gpcb-hl-line-hl';
+const SPEC_RE = /\{([^}]+)\}/;
 
 // GROWI のナビバー要素を検索するセレクタ候補（上から順に試す）
 const NAVBAR_SELECTORS = [
@@ -29,11 +34,17 @@ const NAVBAR_SELECTORS = [
 
 type CopyBtnState = 'copy' | 'ok' | 'fail';
 
+interface LinenumConfig {
+  start: number;
+  highlights: Set<number>;
+}
+
 interface BlockRefs {
   toolbar: HTMLDivElement;
   filenameLabel: HTMLSpanElement | null;
   lineNums: HTMLElement | null;
   codeWrap: HTMLDivElement | null;
+  hlOverlay: HTMLDivElement | null;
   copyBtn: HTMLButtonElement | null;
   copyHandler: ((e: MouseEvent) => void) | null;
   copyTimerId?: number;
@@ -172,13 +183,63 @@ function handleCopyClick(code: HTMLElement, btn: HTMLButtonElement, pre: HTMLPre
   );
 }
 
+// --- linenum spec parser ---
+
+function parseLinenumSpec(inner: string): LinenumConfig {
+  const config: LinenumConfig = { start: 1, highlights: new Set() };
+  // ルックアヘッドで「次の key= が来るまで」を value として貪欲マッチ。
+  // これにより hl=3,5-7 の内部カンマを誤分割しない。
+  const re = /(\w+)\s*=\s*([^=]*?)(?=,\s*\w+\s*=|$)/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(inner)) !== null) {
+    const key = m[1].trim();
+    const value = m[2].trim();
+    if (key === 'start') {
+      const n = parseInt(value, 10);
+      if (!isNaN(n) && n >= 1) config.start = n;
+    } else if (key === 'hl') {
+      for (const part of value.split(',')) {
+        const t = part.trim();
+        const range = t.match(/^(\d+)-(\d+)$/);
+        if (range) {
+          const from = parseInt(range[1], 10);
+          const to = parseInt(range[2], 10);
+          if (!isNaN(from) && !isNaN(to) && from <= to) {
+            for (let i = from; i <= to; i++) config.highlights.add(i);
+          }
+        } else if (/^\d+$/.test(t)) {
+          config.highlights.add(parseInt(t, 10));
+        }
+      }
+    }
+  }
+  return config;
+}
+
+function findLinenumSpec(pre: HTMLPreElement, code: HTMLElement): string | null {
+  // <code> の className 内を先に確認（filename なしの場合）
+  for (const cls of code.classList) {
+    if (cls.startsWith('language-')) {
+      const match = cls.match(SPEC_RE);
+      if (match) return match[1];
+    }
+  }
+  // <cite> テキスト内を確認（filename ありの場合、GROWI が cite に filename+spec を入れる）
+  const cite = pre.querySelector<HTMLElement>(GROWI_FILENAME_SELECTOR);
+  if (cite) {
+    const match = cite.textContent?.match(SPEC_RE);
+    if (match) return match[1];
+  }
+  return null;
+}
+
 // --- setup / enhance / cleanup ---
 
 function setupFilenameLabel(pre: HTMLPreElement): void {
   if (pre.hasAttribute(NO_FILENAME_ATTR)) return;
   const cite = pre.querySelector<HTMLElement>(GROWI_FILENAME_SELECTOR);
   if (!cite) return;
-  const filename = cite.textContent?.trim();
+  const filename = cite.textContent?.trim().replace(/\s*\{[^}]*\}\s*$/, '').trim();
   if (!filename) return;
 
   const label = document.createElement('span');
@@ -206,12 +267,19 @@ function setupLineNumbers(pre: HTMLPreElement, code: HTMLElement): void {
   if (stripped === '') return;
   const lineCount = stripped.split('\n').length;
 
+  const specStr = findLinenumSpec(pre, code);
+  const config: LinenumConfig = specStr
+    ? parseLinenumSpec(specStr)
+    : { start: 1, highlights: new Set() };
+
   const aside = document.createElement('aside');
   aside.className = LINENUMS_CLASS;
   aside.setAttribute('aria-hidden', 'true');
-  for (let i = 1; i <= lineCount; i++) {
+  for (let i = 0; i < lineCount; i++) {
+    const displayNum = config.start + i;
     const span = document.createElement('span');
-    span.textContent = String(i);
+    span.textContent = String(displayNum);
+    if (config.highlights.has(displayNum)) span.classList.add(LINENUM_HL_CLASS);
     aside.appendChild(span);
   }
 
@@ -221,12 +289,29 @@ function setupLineNumbers(pre: HTMLPreElement, code: HTMLElement): void {
   code.parentNode!.insertBefore(codeWrap, code);
   codeWrap.appendChild(code);
 
+  // ハイライト行があればオーバーレイを挿入（flex 等分割で line-height 計測不要）
+  let hlOverlay: HTMLDivElement | null = null;
+  if (config.highlights.size > 0) {
+    hlOverlay = document.createElement('div');
+    hlOverlay.className = HL_OVERLAY_CLASS;
+    hlOverlay.setAttribute('aria-hidden', 'true');
+    for (let i = 0; i < lineCount; i++) {
+      const displayNum = config.start + i;
+      const row = document.createElement('div');
+      row.className = HL_LINE_CLASS;
+      if (config.highlights.has(displayNum)) row.classList.add(HL_LINE_HL_CLASS);
+      hlOverlay.appendChild(row);
+    }
+    codeWrap.prepend(hlOverlay);
+  }
+
   inner.prepend(aside);
 
   const refs = blockRefs.get(pre);
   if (refs) {
     refs.lineNums = aside;
     refs.codeWrap = codeWrap;
+    refs.hlOverlay = hlOverlay;
   }
 }
 
@@ -267,7 +352,7 @@ function enhanceCodeBlock(pre: HTMLPreElement): void {
   const toolbar = document.createElement('div');
   toolbar.className = 'gpcb-toolbar';
 
-  blockRefs.set(pre, { toolbar, filenameLabel: null, lineNums: null, codeWrap: null, copyBtn: null, copyHandler: null });
+  blockRefs.set(pre, { toolbar, filenameLabel: null, lineNums: null, codeWrap: null, hlOverlay: null, copyBtn: null, copyHandler: null });
 
   setupCopyButton(toolbar, code, pre);
 
@@ -355,7 +440,8 @@ export function createCodeBlockExtended(): { mount(): void; unmount(): void } {
               el.classList?.contains('gpcb-toolbar') ||
               el.classList?.contains(FILENAME_CLASS) ||
               el.classList?.contains(LINENUMS_CLASS) ||
-              el.classList?.contains(CODE_WRAP_CLASS)
+              el.classList?.contains(CODE_WRAP_CLASS) ||
+              el.classList?.contains(HL_OVERLAY_CLASS)
             ) continue;
 
             // GROWI が enhance 済み <pre> に後から <cite class="code-highlighted-title"> を追加するケース
@@ -384,6 +470,7 @@ export function createCodeBlockExtended(): { mount(): void; unmount(): void } {
               if (refs && (!refs.lineNums || !refs.lineNums.isConnected)) {
                 refs.lineNums = null;
                 refs.codeWrap = null;
+                refs.hlOverlay = null;
                 const code = parentPre.querySelector<HTMLElement>('code');
                 if (code) setupLineNumbers(parentPre, code);
               }

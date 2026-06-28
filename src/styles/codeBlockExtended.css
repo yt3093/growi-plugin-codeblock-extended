@@ -139,11 +139,40 @@ pre.gpcb-enhanced > div > code {
 
 /* コードのスクロールコンテナ: aside の外にあるため aside は常に左端に固定される */
 .gpcb-code-wrap {
+  position: relative; /* hl-overlay の containing block */
   flex: 1 1 auto;
   min-width: 0;
   overflow-x: auto;
   scrollbar-width: thin;
   scrollbar-color: rgba(255, 255, 255, 0.25) transparent;
+}
+
+/* ハイライトオーバーレイ: code-wrap の全高を flex 等分して line-height に自動整合 */
+.gpcb-hl-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.gpcb-hl-line {
+  flex: 1 1 0;
+  min-height: 0;
+}
+
+.gpcb-hl-line.gpcb-hl-line-hl {
+  background: rgba(255, 235, 100, 0.10);
+}
+
+/* <code> はオーバーレイより手前に描画 */
+.gpcb-code-wrap > code {
+  position: relative;
+  z-index: 1;
 }
 
 .gpcb-code-wrap::-webkit-scrollbar {
@@ -175,15 +204,21 @@ pre.gpcb-enhanced > div > code {
   pointer-events: none;
 }
 
+.gpcb-linenums > span.gpcb-linenum-hl {
+  background: rgba(255, 235, 100, 0.10);
+  color: rgba(255, 235, 100, 0.9);
+}
+
 .gpcb-linenums > span {
   display: block;
 }
 
-/* Print: toolbar / filename label / linenums を非表示 */
+/* Print: toolbar / filename label / linenums / hl-overlay を非表示 */
 @media print {
   .gpcb-toolbar,
   .gpcb-filename,
-  .gpcb-linenums {
+  .gpcb-linenums,
+  .gpcb-hl-overlay {
     display: none;
   }
 }
