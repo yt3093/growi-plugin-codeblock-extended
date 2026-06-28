@@ -22,13 +22,13 @@
 | deactivate | 全 listener 解除・MutationObserver.disconnect・モンキーパッチ復元・toolbar 削除・付与した `gpcb-enhanced` クラスと `data-gpcb-enhanced` 属性を全削除。`<code>` の中身は完全無変更 |
 | ダークモード | `@media (prefers-color-scheme: dark)` と `html[data-bs-theme="dark"]`（Bootstrap 5.3 GROWI UI トグル）の双方で CSS 変数を上書き |
 | reduced-motion | `prefers-reduced-motion: reduce` 環境ではフラッシュアニメなし |
-| 印刷 | `@media print` で `.gpcb-toolbar` を非表示 |
+| 行番号 | コードブロック左側に `<aside class="gpcb-linenums">` を並置。Prism 内側 div を `display: flex !important` で flex 化し、`<aside>`（flex-shrink: 0）と `<code>`（`overflow-x: auto`）を横並びにする。デフォルト ON。`<code>` の DOM は不変。`data-no-linenum` で opt-out |
+| 印刷 | `@media print` で `.gpcb-toolbar` / `.gpcb-linenums` を非表示 |
 
 ### 今後のロードマップ（未実装・ブランチを分けて順次実装）
 
 | Step | 機能 | opt-out 属性 |
 |---|---|---|
-| Step 3 | 行番号（`<aside class="gpcb-linenums">` を `<pre>` 内に並置、`<code>` は不変） | `data-no-linenum` |
 | Step 4 | 折りたたみ（行数閾値超過時に max-height 制限 + 展開ボタン） | `data-no-fold` |
 | Step 5 | 全画面（`<dialog>` に `cloneNode(true)` してモーダル表示、Esc で閉じる） | `data-no-full` |
 | Step 6+ | ユーザーと 1 つずつ相談しながら追加 | — |
@@ -71,7 +71,7 @@ growi-plugin-codeblock-extended/
   - `pre.querySelector('code')` が存在する（**直下子ではなく子孫を検索**。GROWI の Prism が `<pre>` と `<code>` の間に `<div>` を挿入するため `:scope > code` は不可）
   - `isInEditorDOM(pre)` が false（`.CodeMirror` / `.cm-editor` / `[contenteditable="true"]` 配下でない）
   - `isHiddenContext()` が false
-  - 各機能の opt-out（`data-no-copy` / `data-no-filename`）は機能ごとの setup 関数内で確認するため、`isEligible` では判定しない
+  - 各機能の opt-out（`data-no-copy` / `data-no-filename` / `data-no-linenum`）は機能ごとの setup 関数内で確認するため、`isEligible` では判定しない
 
 - **`enhanceCodeBlock(pre)`**: コーディネータ
   1. `<div class="gpcb-toolbar">` を生成
@@ -79,6 +79,7 @@ growi-plugin-codeblock-extended/
   3. `setupCopyButton(toolbar, code, pre)` — `navigator.clipboard.writeText` が利用可能かつ `data-no-copy` がなければボタンを生成
   4. `pre.classList.add('gpcb-enhanced')`、`pre.prepend(toolbar)`
   5. `setupFilenameLabel(pre)` — `data-no-filename` がなく `<cite class="code-highlighted-title">` が存在すれば、その textContent を `<span class="gpcb-filename">` として prepend（DOM 順: [filename, toolbar, 元の中身]）
+  6. `setupLineNumbers(pre, code)` — `data-no-linenum` がなく Prism 内側 div が存在すれば、`code.textContent` から行数を算出し `<aside class="gpcb-linenums" aria-hidden="true">` を Prism 内側 div 内に prepend
   6. `pre.setAttribute('data-gpcb-enhanced', '1')`
 
 - **`handleCopyClick(code, btn, pre)`**: `code.textContent ?? ''` を `navigator.clipboard.writeText` に渡す。成功時は `flashCopyState(btn, 'ok', pre)`、失敗時は `flashCopyState(btn, 'fail', pre)` を呼ぶ。
@@ -91,7 +92,7 @@ growi-plugin-codeblock-extended/
 
 - **SPA 遷移検知**: `pushState` / `replaceState` にカスタムイベント `'growi-pcb-navigate'` をモンキーパッチ。`popstate` / `hashchange` も購読し、いずれも 2 段 `requestAnimationFrame` で DOM が安定してから `scanAndEnhance()` を実行。
 
-- **MutationObserver**: `document.body` を `childList: true, subtree: true, attributes: true, attributeFilter: ['class']` で監視。追加ノード判定では **`.gpcb-toolbar` および `.gpcb-filename` を持つ要素はスキップ**して自己追加による無限ループを防ぐ。`body.class` 変化時（編集モード遷移）は `isHiddenContext()` を判定し、true なら全 enhanced `<pre>` を即 `cleanupBlock`、false なら `scheduleScan()`。
+- **MutationObserver**: `document.body` を `childList: true, subtree: true, attributes: true, attributeFilter: ['class']` で監視。追加ノード判定では **`.gpcb-toolbar` / `.gpcb-filename` / `.gpcb-linenums` を持つ要素はスキップ**して自己追加による無限ループを防ぐ。`body.class` 変化時（編集モード遷移）は `isHiddenContext()` を判定し、true なら全 enhanced `<pre>` を即 `cleanupBlock`、false なら `scheduleScan()`。
 
 - **`isHiddenContext()`**: `/admin` / `/admin/*` パス、`#edit` / `/edit` サフィックス、`body.editing` / `body.grw-editor-mode` / `body.modal-open` クラスのいずれかで true を返す。
 
@@ -107,7 +108,9 @@ growi-plugin-codeblock-extended/
 | CSS 変数 | `--gpcb-*` |
 | opt-out（コピー） | `data-no-copy` |
 | opt-out（ファイル名ラベル） | `data-no-filename` |
+| opt-out（行番号） | `data-no-linenum` |
 | ファイル名ラベル属性 | `data-gpcb-filename` |
+| 行番号 aside クラス | `gpcb-linenums` |
 | pluginActivators キー | `growi-plugin-codeblock-extended` |
 
 ## ハマりどころ（必読）
@@ -188,6 +191,12 @@ DOM ノード自体は残すこと（`cite.remove()` などはしない）。`un
 ツールバー top        = 4px + 1.55rem + 0.4rem = 4px + 1.95rem
 ```
 
+### 12. Prism 内側 div の `display: flex !important`
+
+行番号 `<aside>` を `<code>` と横並びにするため、Prism 内側 div のインライン `display: block` を CSS で `display: flex !important` に上書きしている。インラインスタイルを上書きするため `!important` が必要。`<code>` 側は `flex: 1 1 auto; min-width: 0; overflow-x: auto;` を当てて、横スクロール領域を `<code>` 内に閉じ込める。これにより `<aside>` は自然に左固定になる（`position: sticky` などのハックは不要）。
+
+`unmount()` で `pre.gpcb-enhanced` クラスが外れれば CSS スコープが解除され、Prism 内側 div は元の `display: block` に戻る。
+
 ## デプロイ手順
 
 ```bash
@@ -225,6 +234,13 @@ GROWI 管理画面 `/admin/plugins` で **削除 → 再インストール**。
 22. `<pre data-no-copy>` でコピーボタンが非表示になる（ラベルは出る）
 23. 印刷プレビューでラベルが非表示になる
 24. ラベルあり・なしでコピーボタンの位置が揃っている（ともにコードエリア上端から 0.4rem 内側）
+25. 行番号がコードブロック左側に薄いグレーで表示される
+26. 行番号の数が実際のコード行数と一致する（末尾改行は除外）
+27. `<pre data-no-linenum>` で行番号が出ない（コピーボタン・ラベルは出る）
+28. コピーボタンで行番号がクリップボードに混入しない
+29. 横スクロール時に行番号が左に固定される
+30. 印刷プレビューで行番号が非表示になる
+31. `unmount` 後に `<aside class="gpcb-linenums">` が消え、Prism 内側 div の flex 上書きが外れる
 
 ## 会話ガイドライン
 

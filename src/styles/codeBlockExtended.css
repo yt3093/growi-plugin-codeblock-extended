@@ -125,10 +125,44 @@ pre.gpcb-enhanced .code-highlighted-title {
   }
 }
 
-/* Print: toolbar / filename label を非表示 */
+/* 行番号と <code> を横並びにする。Prism のインライン style より優先するため !important */
+pre.gpcb-enhanced > div {
+  display: flex !important;
+  align-items: stretch;
+}
+
+/* <code> を flex item として横スクロール可能にする
+   min-width: 0 がないと flex 子要素の収縮が効かず横にはみ出す */
+pre.gpcb-enhanced > div > code {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-x: auto;
+}
+
+/* 行番号 aside */
+.gpcb-linenums {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  padding-right: 1em;
+  margin-right: 0.5em;
+  font-family: var(--bs-font-monospace, ui-monospace, SFMono-Regular, monospace);
+  font-feature-settings: 'tnum';
+  text-align: right;
+  color: rgba(255, 255, 255, 0.4);
+  user-select: none;
+  pointer-events: none;
+}
+
+.gpcb-linenums > span {
+  display: block;
+}
+
+/* Print: toolbar / filename label / linenums を非表示 */
 @media print {
   .gpcb-toolbar,
-  .gpcb-filename {
+  .gpcb-filename,
+  .gpcb-linenums {
     display: none;
   }
 }
