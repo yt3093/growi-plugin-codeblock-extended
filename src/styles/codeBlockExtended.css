@@ -209,12 +209,66 @@ pre.gpcb-enhanced > div > code {
   color: rgba(255, 235, 100, 0.9);
 }
 
-/* Print: toolbar / filename label / linenums / hl-overlay を非表示 */
+/* Print: toolbar / filename label / linenums / diff-gutter / hl-overlay を非表示 */
 @media print {
   .gpcb-toolbar,
   .gpcb-filename,
   .gpcb-linenums,
+  .gpcb-diff-gutter,
   .gpcb-hl-overlay {
     display: none;
   }
+}
+
+/* ================================================================
+   diff 表示
+   Prism / Shiki が language-diff ブロックに付けるトークン色（文字色・
+   背景色）を無効化し、gpcb-diff-overlay の背景色のみで差分を表現する。
+   !important でインラインスタイル（Shiki）も上書きする。
+   ================================================================ */
+pre.gpcb-enhanced code.language-diff .token {
+  color: inherit !important;
+  background: none !important;
+}
+
+/* diff ガター: gpcb-linenums と同構造で +/−/@ 記号を表示 */
+.gpcb-diff-gutter {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  font-family: var(--bs-font-monospace, ui-monospace, SFMono-Regular, monospace);
+  font-feature-settings: 'tnum';
+  text-align: center;
+  user-select: none;
+  pointer-events: none;
+}
+
+.gpcb-diff-gutter > span {
+  display: block;
+  padding: 0 0.6em;
+}
+
+.gpcb-diff-gutter > span.gpcb-diff-add {
+  color: var(--gpcb-diff-add-gutter-color, #3fb950);
+}
+
+.gpcb-diff-gutter > span.gpcb-diff-rm {
+  color: var(--gpcb-diff-rm-gutter-color, #f85149);
+}
+
+.gpcb-diff-gutter > span.gpcb-diff-hh {
+  color: var(--gpcb-diff-hh-gutter-color, #a371f7);
+}
+
+/* diff オーバーレイの背景色 */
+.gpcb-hl-line.gpcb-diff-line-add {
+  background: var(--gpcb-diff-add-bg, rgba(46, 160, 67, 0.18));
+}
+
+.gpcb-hl-line.gpcb-diff-line-rm {
+  background: var(--gpcb-diff-rm-bg, rgba(248, 81, 73, 0.18));
+}
+
+.gpcb-hl-line.gpcb-diff-line-hh {
+  background: var(--gpcb-diff-hunk-bg, rgba(163, 113, 247, 0.10));
 }

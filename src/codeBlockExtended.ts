@@ -22,6 +22,15 @@ const HL_LINE_CLASS = 'gpcb-hl-line';
 const HL_LINE_HL_CLASS = 'gpcb-hl-line-hl';
 const SPEC_RE = /\{([^}]+)\}/;
 
+const NO_DIFF_ATTR = 'data-no-diff';
+const DIFF_GUTTER_CLASS = 'gpcb-diff-gutter';
+const DIFF_GUTTER_ADD_CLASS = 'gpcb-diff-add';
+const DIFF_GUTTER_RM_CLASS = 'gpcb-diff-rm';
+const DIFF_GUTTER_HH_CLASS = 'gpcb-diff-hh';
+const DIFF_LINE_ADD_CLASS = 'gpcb-diff-line-add';
+const DIFF_LINE_RM_CLASS = 'gpcb-diff-line-rm';
+const DIFF_LINE_HH_CLASS = 'gpcb-diff-line-hh';
+
 // GROWI のナビバー要素を検索するセレクタ候補（上から順に試す）
 const NAVBAR_SELECTORS = [
   '#grw-contextual-sub-nav',
@@ -33,6 +42,7 @@ const NAVBAR_SELECTORS = [
 ];
 
 type CopyBtnState = 'copy' | 'ok' | 'fail';
+type DiffLineType = 'added' | 'removed' | 'hunk' | 'context';
 
 interface LinenumConfig {
   start: number;
@@ -43,6 +53,7 @@ interface BlockRefs {
   toolbar: HTMLDivElement;
   filenameLabel: HTMLSpanElement | null;
   lineNums: HTMLElement | null;
+  diffGutter: HTMLElement | null;
   codeWrap: HTMLDivElement | null;
   hlOverlay: HTMLDivElement | null;
   hlScrollHandler: (() => void) | null;
@@ -234,6 +245,91 @@ function findLinenumSpec(pre: HTMLPreElement, code: HTMLElement): string | null 
   return null;
 }
 
+// --- diff helpers ---
+
+function isDiffBlock(code: HTMLElement): boolean {
+  return code.classList.contains('language-diff');
+}
+
+function classifyDiffLine(line: string): DiffLineType {
+  if (line.startsWith('@@')) return 'hunk';
+  // +++ / --- はファイルヘッダー行なので context 扱い
+  if (line.startsWith('+++') || line.startsWith('---')) return 'context';
+  if (line.startsWith('+')) return 'added';
+  if (line.startsWith('-')) return 'removed';
+  return 'context';
+}
+
+function setupDiffView(pre: HTMLPreElement, code: HTMLElement): void {
+  if (pre.hasAttribute(NO_DIFF_ATTR)) return;
+
+  const inner = Array.from(pre.children).find(
+    (el): el is HTMLDivElement =>
+      el.tagName === 'DIV' && !el.classList.contains('gpcb-toolbar'),
+  );
+  if (!inner) return;
+  if (!inner.contains(code)) return;
+
+  const text = code.textContent ?? '';
+  const stripped = text.endsWith('\n') ? text.slice(0, -1) : text;
+  if (stripped === '') return;
+  const lines = stripped.split('\n');
+
+  const aside = document.createElement('aside');
+  aside.className = DIFF_GUTTER_CLASS;
+  aside.setAttribute('aria-hidden', 'true');
+
+  const hlOverlay = document.createElement('div');
+  hlOverlay.className = `${HL_OVERLAY_CLASS} gpcb-diff-overlay`;
+  hlOverlay.setAttribute('aria-hidden', 'true');
+
+  for (const line of lines) {
+    const type = classifyDiffLine(line);
+
+    const span = document.createElement('span');
+    if (type === 'added') {
+      span.textContent = '+';
+      span.classList.add(DIFF_GUTTER_ADD_CLASS);
+    } else if (type === 'removed') {
+      span.textContent = '−'; // 減算記号（−）
+      span.classList.add(DIFF_GUTTER_RM_CLASS);
+    } else if (type === 'hunk') {
+      span.textContent = '@';
+      span.classList.add(DIFF_GUTTER_HH_CLASS);
+    } else {
+      span.textContent = ' '; // nbsp（高さ確保）
+    }
+    aside.appendChild(span);
+
+    const row = document.createElement('div');
+    row.className = HL_LINE_CLASS;
+    if (type === 'added') row.classList.add(DIFF_LINE_ADD_CLASS);
+    else if (type === 'removed') row.classList.add(DIFF_LINE_RM_CLASS);
+    else if (type === 'hunk') row.classList.add(DIFF_LINE_HH_CLASS);
+    hlOverlay.appendChild(row);
+  }
+
+  const codeWrap = document.createElement('div');
+  codeWrap.className = CODE_WRAP_CLASS;
+  code.parentNode!.insertBefore(codeWrap, code);
+  codeWrap.appendChild(code);
+  codeWrap.prepend(hlOverlay);
+
+  inner.prepend(aside);
+
+  const refs = blockRefs.get(pre);
+  if (refs) {
+    refs.diffGutter = aside;
+    refs.codeWrap = codeWrap;
+    refs.hlOverlay = hlOverlay;
+    const onScroll = () => {
+      hlOverlay.style.transform = `translateX(${codeWrap.scrollLeft}px)`;
+    };
+    codeWrap.addEventListener('scroll', onScroll, { passive: true });
+    refs.hlScrollHandler = onScroll;
+  }
+}
+
 // --- setup / enhance / cleanup ---
 
 function setupFilenameLabel(pre: HTMLPreElement): void {
@@ -360,14 +456,18 @@ function enhanceCodeBlock(pre: HTMLPreElement): void {
   const toolbar = document.createElement('div');
   toolbar.className = 'gpcb-toolbar';
 
-  blockRefs.set(pre, { toolbar, filenameLabel: null, lineNums: null, codeWrap: null, hlOverlay: null, hlScrollHandler: null, copyBtn: null, copyHandler: null });
+  blockRefs.set(pre, { toolbar, filenameLabel: null, lineNums: null, diffGutter: null, codeWrap: null, hlOverlay: null, hlScrollHandler: null, copyBtn: null, copyHandler: null });
 
   setupCopyButton(toolbar, code, pre);
 
   pre.classList.add('gpcb-enhanced');
   pre.prepend(toolbar);
   setupFilenameLabel(pre);
-  setupLineNumbers(pre, code);
+  if (isDiffBlock(code)) {
+    setupDiffView(pre, code);
+  } else {
+    setupLineNumbers(pre, code);
+  }
   pre.setAttribute(ENHANCED_ATTR, '1');
 }
 
@@ -388,6 +488,7 @@ function cleanupBlock(pre: HTMLPreElement): void {
       refs.codeWrap.remove();
     }
     refs.lineNums?.remove();
+    refs.diffGutter?.remove();
     refs.filenameLabel?.remove();
     refs.toolbar.remove();
     blockRefs.delete(pre);
@@ -446,11 +547,12 @@ export function createCodeBlockExtended(): { mount(): void; unmount(): void } {
           for (const node of Array.from(m.addedNodes)) {
             if (node.nodeType !== Node.ELEMENT_NODE) continue;
             const el = node as Element;
-            // プラグイン自身が追加した toolbar / filename label / linenums は無視して無限ループを防ぐ
+            // プラグイン自身が追加した toolbar / filename label / linenums / diff-gutter は無視して無限ループを防ぐ
             if (
               el.classList?.contains('gpcb-toolbar') ||
               el.classList?.contains(FILENAME_CLASS) ||
               el.classList?.contains(LINENUMS_CLASS) ||
+              el.classList?.contains(DIFF_GUTTER_CLASS) ||
               el.classList?.contains(CODE_WRAP_CLASS) ||
               el.classList?.contains(HL_OVERLAY_CLASS)
             ) continue;
@@ -477,17 +579,22 @@ export function createCodeBlockExtended(): { mount(): void; unmount(): void } {
             ) {
               const parentPre = m.target as HTMLPreElement;
               const refs = blockRefs.get(parentPre);
-              // isConnected で旧 aside が DOM から切り離されていないか確認する
-              if (refs && (!refs.lineNums || !refs.lineNums.isConnected)) {
+              // lineNums（通常）または diffGutter（diff）のどちらかが切り離されていれば再セットアップ
+              const activeGutter = refs?.lineNums ?? refs?.diffGutter;
+              if (refs && (!activeGutter || !activeGutter.isConnected)) {
                 if (refs.hlScrollHandler && refs.codeWrap) {
                   refs.codeWrap.removeEventListener('scroll', refs.hlScrollHandler);
                 }
                 refs.lineNums = null;
+                refs.diffGutter = null;
                 refs.codeWrap = null;
                 refs.hlOverlay = null;
                 refs.hlScrollHandler = null;
                 const code = parentPre.querySelector<HTMLElement>('code');
-                if (code) setupLineNumbers(parentPre, code);
+                if (code) {
+                  if (isDiffBlock(code)) setupDiffView(parentPre, code);
+                  else setupLineNumbers(parentPre, code);
+                }
               }
               continue;
             }
