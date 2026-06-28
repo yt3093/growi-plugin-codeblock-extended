@@ -110,8 +110,8 @@ pre.gpcb-enhanced .code-highlighted-title {
   color: #ffffffe6;
   background: #323e52;
   border-radius: 0.3em 0.3em 0 0;
-  user-select: none;
-  pointer-events: none;
+  user-select: text;
+  pointer-events: auto;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
