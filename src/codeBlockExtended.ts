@@ -13,6 +13,15 @@ const FILENAME_ATTR = 'data-gpcb-filename';
 const FILENAME_CLASS = 'gpcb-filename';
 const GROWI_FILENAME_SELECTOR = 'cite.code-highlighted-title';
 
+const NO_LINENUM_ATTR = 'data-no-linenum';
+const LINENUMS_CLASS = 'gpcb-linenums';
+const LINENUM_HL_CLASS = 'gpcb-linenum-hl';
+const CODE_WRAP_CLASS = 'gpcb-code-wrap';
+const HL_OVERLAY_CLASS = 'gpcb-hl-overlay';
+const HL_LINE_CLASS = 'gpcb-hl-line';
+const HL_LINE_HL_CLASS = 'gpcb-hl-line-hl';
+const SPEC_RE = /\{([^}]+)\}/;
+
 // GROWI のナビバー要素を検索するセレクタ候補（上から順に試す）
 const NAVBAR_SELECTORS = [
   '#grw-contextual-sub-nav',
@@ -25,9 +34,18 @@ const NAVBAR_SELECTORS = [
 
 type CopyBtnState = 'copy' | 'ok' | 'fail';
 
+interface LinenumConfig {
+  start: number;
+  highlights: Set<number>;
+}
+
 interface BlockRefs {
   toolbar: HTMLDivElement;
   filenameLabel: HTMLSpanElement | null;
+  lineNums: HTMLElement | null;
+  codeWrap: HTMLDivElement | null;
+  hlOverlay: HTMLDivElement | null;
+  hlScrollHandler: (() => void) | null;
   copyBtn: HTMLButtonElement | null;
   copyHandler: ((e: MouseEvent) => void) | null;
   copyTimerId?: number;
@@ -166,13 +184,63 @@ function handleCopyClick(code: HTMLElement, btn: HTMLButtonElement, pre: HTMLPre
   );
 }
 
+// --- linenum spec parser ---
+
+function parseLinenumSpec(inner: string): LinenumConfig {
+  const config: LinenumConfig = { start: 1, highlights: new Set() };
+  // ルックアヘッドで「次の key= が来るまで」を value として貪欲マッチ。
+  // これにより hl=3,5-7 の内部カンマを誤分割しない。
+  const re = /(\w+)\s*=\s*([^=]*?)(?=,\s*\w+\s*=|$)/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(inner)) !== null) {
+    const key = m[1].trim();
+    const value = m[2].trim();
+    if (key === 'start') {
+      const n = parseInt(value, 10);
+      if (!isNaN(n) && n >= 1) config.start = n;
+    } else if (key === 'hl') {
+      for (const part of value.split(',')) {
+        const t = part.trim();
+        const range = t.match(/^(\d+)-(\d+)$/);
+        if (range) {
+          const from = parseInt(range[1], 10);
+          const to = parseInt(range[2], 10);
+          if (!isNaN(from) && !isNaN(to) && from <= to) {
+            for (let i = from; i <= to; i++) config.highlights.add(i);
+          }
+        } else if (/^\d+$/.test(t)) {
+          config.highlights.add(parseInt(t, 10));
+        }
+      }
+    }
+  }
+  return config;
+}
+
+function findLinenumSpec(pre: HTMLPreElement, code: HTMLElement): string | null {
+  // <code> の className 内を先に確認（filename なしの場合）
+  for (const cls of code.classList) {
+    if (cls.startsWith('language-')) {
+      const match = cls.match(SPEC_RE);
+      if (match) return match[1];
+    }
+  }
+  // <cite> テキスト内を確認（filename ありの場合、GROWI が cite に filename+spec を入れる）
+  const cite = pre.querySelector<HTMLElement>(GROWI_FILENAME_SELECTOR);
+  if (cite) {
+    const match = cite.textContent?.match(SPEC_RE);
+    if (match) return match[1];
+  }
+  return null;
+}
+
 // --- setup / enhance / cleanup ---
 
 function setupFilenameLabel(pre: HTMLPreElement): void {
   if (pre.hasAttribute(NO_FILENAME_ATTR)) return;
   const cite = pre.querySelector<HTMLElement>(GROWI_FILENAME_SELECTOR);
   if (!cite) return;
-  const filename = cite.textContent?.trim();
+  const filename = cite.textContent?.trim().replace(/\s*\{[^}]*\}\s*$/, '').trim();
   if (!filename) return;
 
   const label = document.createElement('span');
@@ -183,6 +251,76 @@ function setupFilenameLabel(pre: HTMLPreElement): void {
 
   const refs = blockRefs.get(pre);
   if (refs) refs.filenameLabel = label;
+}
+
+function setupLineNumbers(pre: HTMLPreElement, code: HTMLElement): void {
+  if (pre.hasAttribute(NO_LINENUM_ATTR)) return;
+
+  const inner = Array.from(pre.children).find(
+    (el): el is HTMLDivElement =>
+      el.tagName === 'DIV' && !el.classList.contains('gpcb-toolbar'),
+  );
+  if (!inner) return;
+  if (!inner.contains(code)) return;
+
+  const text = code.textContent ?? '';
+  const stripped = text.endsWith('\n') ? text.slice(0, -1) : text;
+  if (stripped === '') return;
+  const lineCount = stripped.split('\n').length;
+
+  const specStr = findLinenumSpec(pre, code);
+  const config: LinenumConfig = specStr
+    ? parseLinenumSpec(specStr)
+    : { start: 1, highlights: new Set() };
+
+  const aside = document.createElement('aside');
+  aside.className = LINENUMS_CLASS;
+  aside.setAttribute('aria-hidden', 'true');
+  for (let i = 0; i < lineCount; i++) {
+    const displayNum = config.start + i;
+    const span = document.createElement('span');
+    span.textContent = String(displayNum);
+    if (config.highlights.has(displayNum)) span.classList.add(LINENUM_HL_CLASS);
+    aside.appendChild(span);
+  }
+
+  // <code> を横スクロールコンテナで包む（aside を scroll の外に出して左固定を実現）
+  const codeWrap = document.createElement('div');
+  codeWrap.className = CODE_WRAP_CLASS;
+  code.parentNode!.insertBefore(codeWrap, code);
+  codeWrap.appendChild(code);
+
+  // ハイライト行があればオーバーレイを挿入（flex 等分割で line-height 計測不要）
+  let hlOverlay: HTMLDivElement | null = null;
+  if (config.highlights.size > 0) {
+    hlOverlay = document.createElement('div');
+    hlOverlay.className = HL_OVERLAY_CLASS;
+    hlOverlay.setAttribute('aria-hidden', 'true');
+    for (let i = 0; i < lineCount; i++) {
+      const displayNum = config.start + i;
+      const row = document.createElement('div');
+      row.className = HL_LINE_CLASS;
+      if (config.highlights.has(displayNum)) row.classList.add(HL_LINE_HL_CLASS);
+      hlOverlay.appendChild(row);
+    }
+    codeWrap.prepend(hlOverlay);
+  }
+
+  inner.prepend(aside);
+
+  const refs = blockRefs.get(pre);
+  if (refs) {
+    refs.lineNums = aside;
+    refs.codeWrap = codeWrap;
+    refs.hlOverlay = hlOverlay;
+    if (hlOverlay) {
+      const onScroll = () => {
+        hlOverlay!.style.transform = `translateX(${codeWrap.scrollLeft}px)`;
+      };
+      codeWrap.addEventListener('scroll', onScroll, { passive: true });
+      refs.hlScrollHandler = onScroll;
+    }
+  }
 }
 
 function setupCopyButton(toolbar: HTMLDivElement, code: HTMLElement, pre: HTMLPreElement): void {
@@ -222,13 +360,14 @@ function enhanceCodeBlock(pre: HTMLPreElement): void {
   const toolbar = document.createElement('div');
   toolbar.className = 'gpcb-toolbar';
 
-  blockRefs.set(pre, { toolbar, filenameLabel: null, copyBtn: null, copyHandler: null });
+  blockRefs.set(pre, { toolbar, filenameLabel: null, lineNums: null, codeWrap: null, hlOverlay: null, hlScrollHandler: null, copyBtn: null, copyHandler: null });
 
   setupCopyButton(toolbar, code, pre);
 
   pre.classList.add('gpcb-enhanced');
   pre.prepend(toolbar);
   setupFilenameLabel(pre);
+  setupLineNumbers(pre, code);
   pre.setAttribute(ENHANCED_ATTR, '1');
 }
 
@@ -239,6 +378,16 @@ function cleanupBlock(pre: HTMLPreElement): void {
     if (refs.copyBtn && refs.copyHandler) {
       refs.copyBtn.removeEventListener('click', refs.copyHandler);
     }
+    if (refs.hlScrollHandler && refs.codeWrap) {
+      refs.codeWrap.removeEventListener('scroll', refs.hlScrollHandler);
+    }
+    if (refs.codeWrap?.isConnected) {
+      while (refs.codeWrap.firstChild) {
+        refs.codeWrap.parentNode!.insertBefore(refs.codeWrap.firstChild, refs.codeWrap);
+      }
+      refs.codeWrap.remove();
+    }
+    refs.lineNums?.remove();
     refs.filenameLabel?.remove();
     refs.toolbar.remove();
     blockRefs.delete(pre);
@@ -297,8 +446,14 @@ export function createCodeBlockExtended(): { mount(): void; unmount(): void } {
           for (const node of Array.from(m.addedNodes)) {
             if (node.nodeType !== Node.ELEMENT_NODE) continue;
             const el = node as Element;
-            // プラグイン自身が追加した toolbar / filename label は無視して無限ループを防ぐ
-            if (el.classList?.contains('gpcb-toolbar') || el.classList?.contains(FILENAME_CLASS)) continue;
+            // プラグイン自身が追加した toolbar / filename label / linenums は無視して無限ループを防ぐ
+            if (
+              el.classList?.contains('gpcb-toolbar') ||
+              el.classList?.contains(FILENAME_CLASS) ||
+              el.classList?.contains(LINENUMS_CLASS) ||
+              el.classList?.contains(CODE_WRAP_CLASS) ||
+              el.classList?.contains(HL_OVERLAY_CLASS)
+            ) continue;
 
             // GROWI が enhance 済み <pre> に後から <cite class="code-highlighted-title"> を追加するケース
             // （enhance 時点で cite がなく setupFilenameLabel が空振りした場合の救済）
@@ -309,6 +464,30 @@ export function createCodeBlockExtended(): { mount(): void; unmount(): void } {
                 if (refs && !refs.filenameLabel) {
                   setupFilenameLabel(parentPre);
                 }
+              }
+              continue;
+            }
+
+            // Prism が enhance 済み <pre> に後から内側 div を挿入 or 差し替えするケース
+            // （enhance 時点で Prism div が未挿入の場合、および Prism がハイライト適用で div を差し替えた場合の救済）
+            if (
+              m.target.nodeType === Node.ELEMENT_NODE &&
+              (m.target as Element).matches?.(`pre[${ENHANCED_ATTR}]`) &&
+              el.tagName === 'DIV'
+            ) {
+              const parentPre = m.target as HTMLPreElement;
+              const refs = blockRefs.get(parentPre);
+              // isConnected で旧 aside が DOM から切り離されていないか確認する
+              if (refs && (!refs.lineNums || !refs.lineNums.isConnected)) {
+                if (refs.hlScrollHandler && refs.codeWrap) {
+                  refs.codeWrap.removeEventListener('scroll', refs.hlScrollHandler);
+                }
+                refs.lineNums = null;
+                refs.codeWrap = null;
+                refs.hlOverlay = null;
+                refs.hlScrollHandler = null;
+                const code = parentPre.querySelector<HTMLElement>('code');
+                if (code) setupLineNumbers(parentPre, code);
               }
               continue;
             }

@@ -22,13 +22,17 @@
 | deactivate | 全 listener 解除・MutationObserver.disconnect・モンキーパッチ復元・toolbar 削除・付与した `gpcb-enhanced` クラスと `data-gpcb-enhanced` 属性を全削除。`<code>` の中身は完全無変更 |
 | ダークモード | `@media (prefers-color-scheme: dark)` と `html[data-bs-theme="dark"]`（Bootstrap 5.3 GROWI UI トグル）の双方で CSS 変数を上書き |
 | reduced-motion | `prefers-reduced-motion: reduce` 環境ではフラッシュアニメなし |
-| 印刷 | `@media print` で `.gpcb-toolbar` を非表示 |
+| 行番号 | コードブロック左側に `<aside class="gpcb-linenums">` を並置。Prism 内側 div を `display: flex !important` で flex 化し、`<aside>`（flex-shrink: 0）と `.gpcb-code-wrap`（`overflow-x: auto`）を横並び。`<code>` の DOM は不変。`data-no-linenum` で opt-out |
+| コードスクロールコンテナ | `<code>` を `<div class="gpcb-code-wrap">` で包んで `overflow-x: auto` をここに限定。`<aside>` は flex item として外側に置くため横スクロール時に左固定になる（`position: sticky` 不要） |
+| 開始行番号指定 | コードフェンスに `{start=N}` を付けると行番号を N から開始。`findLinenumSpec` で `<code>` className または `<cite>` テキストから `{...}` を抽出し、`parseLinenumSpec` で解析 |
+| 行ハイライト | `{hl=行番号[,範囲...]}` で指定行の背景を強調。コード側は `.gpcb-code-wrap` 内の絶対配置 flex column オーバーレイ（`.gpcb-hl-overlay`）、行番号 aside 側は対応 `<span>` に `.gpcb-linenum-hl` クラスを付与 |
+| ハイライト横スクロール追従 | オーバーレイは `left: 0; right: 0`（visible 幅固定）。`codeWrap` の scroll イベントで `hlOverlay.style.transform = translateX(scrollLeft)` を更新しビューポート追従させる（layout 計測不要） |
+| 印刷 | `@media print` で `.gpcb-toolbar` / `.gpcb-linenums` / `.gpcb-hl-overlay` を非表示 |
 
 ### 今後のロードマップ（未実装・ブランチを分けて順次実装）
 
 | Step | 機能 | opt-out 属性 |
 |---|---|---|
-| Step 3 | 行番号（`<aside class="gpcb-linenums">` を `<pre>` 内に並置、`<code>` は不変） | `data-no-linenum` |
 | Step 4 | 折りたたみ（行数閾値超過時に max-height 制限 + 展開ボタン） | `data-no-fold` |
 | Step 5 | 全画面（`<dialog>` に `cloneNode(true)` してモーダル表示、Esc で閉じる） | `data-no-full` |
 | Step 6+ | ユーザーと 1 つずつ相談しながら追加 | — |
@@ -71,15 +75,16 @@ growi-plugin-codeblock-extended/
   - `pre.querySelector('code')` が存在する（**直下子ではなく子孫を検索**。GROWI の Prism が `<pre>` と `<code>` の間に `<div>` を挿入するため `:scope > code` は不可）
   - `isInEditorDOM(pre)` が false（`.CodeMirror` / `.cm-editor` / `[contenteditable="true"]` 配下でない）
   - `isHiddenContext()` が false
-  - 各機能の opt-out（`data-no-copy` / `data-no-filename`）は機能ごとの setup 関数内で確認するため、`isEligible` では判定しない
+  - 各機能の opt-out（`data-no-copy` / `data-no-filename` / `data-no-linenum`）は機能ごとの setup 関数内で確認するため、`isEligible` では判定しない
 
 - **`enhanceCodeBlock(pre)`**: コーディネータ
   1. `<div class="gpcb-toolbar">` を生成
-  2. `blockRefs.set(pre, { toolbar, filenameLabel: null, copyBtn: null, copyHandler: null })` で WeakMap に登録
+  2. `blockRefs.set(pre, { toolbar, filenameLabel: null, lineNums: null, codeWrap: null, hlOverlay: null, hlScrollHandler: null, copyBtn: null, copyHandler: null })` で WeakMap に登録
   3. `setupCopyButton(toolbar, code, pre)` — `navigator.clipboard.writeText` が利用可能かつ `data-no-copy` がなければボタンを生成
   4. `pre.classList.add('gpcb-enhanced')`、`pre.prepend(toolbar)`
   5. `setupFilenameLabel(pre)` — `data-no-filename` がなく `<cite class="code-highlighted-title">` が存在すれば、その textContent を `<span class="gpcb-filename">` として prepend（DOM 順: [filename, toolbar, 元の中身]）
-  6. `pre.setAttribute('data-gpcb-enhanced', '1')`
+  6. `setupLineNumbers(pre, code)` — `data-no-linenum` がなく Prism 内側 div が存在すれば、行数算出・spec 解析・aside 生成・code-wrap 生成・hlOverlay 生成・scroll リスナー登録を行う
+  7. `pre.setAttribute('data-gpcb-enhanced', '1')`
 
 - **`handleCopyClick(code, btn, pre)`**: `code.textContent ?? ''` を `navigator.clipboard.writeText` に渡す。成功時は `flashCopyState(btn, 'ok', pre)`、失敗時は `flashCopyState(btn, 'fail', pre)` を呼ぶ。
 
@@ -87,11 +92,17 @@ growi-plugin-codeblock-extended/
 
 - **`setCopyBtnState(btn, state)`**: ボタンの子要素を全削除してから `COPY_BTN_STATE_MAP` のアイコン生成関数を呼び、結果を `appendChild`。`innerHTML` は使わない。
 
-- **`cleanupBlock(pre)`**: `blockRefs.get(pre)` から `copyTimerId`（`clearTimeout`）・`copyHandler`（`removeEventListener`）・`filenameLabel`（`.remove()`）・`toolbar`（`.remove()`）を取り出してクリーンアップ。`gpcb-enhanced` クラスと `data-gpcb-enhanced` 属性を削除。`<code>` の中身は一切変更しない。`<cite class="code-highlighted-title">` は DOM から削除しない（CSS `pre.gpcb-enhanced .code-highlighted-title { display: none }` が外れると自動復帰する）。
+- **`setupLineNumbers(pre, code)`**: ① `code.textContent` から行数算出（末尾改行除外）② `findLinenumSpec` → `parseLinenumSpec` で `{start=N,hl=...}` を解析 ③ `<aside class="gpcb-linenums">` を行数分の `<span>` で生成（highlight 行は `.gpcb-linenum-hl` クラス）④ `<div class="gpcb-code-wrap">` で `<code>` を包む ⑤ highlight 行があれば `<div class="gpcb-hl-overlay">` を `codeWrap.prepend` ⑥ scroll イベントリスナーを codeWrap に登録し `refs.hlScrollHandler` に保持 ⑦ aside を Prism 内側 div に prepend
+
+- **`findLinenumSpec(pre, code)`**: `<code>` の className を先に確認（`language-xxx{...}` 形式）。なければ `<cite class="code-highlighted-title">` のテキストを確認（ファイル名あり記法では cite に `file.py{...}` が残る）。`SPEC_RE = /\{([^}]+)\}/` でマッチ。
+
+- **`parseLinenumSpec(inner)`**: ルックアヘッド正規表現 `/(\w+)\s*=\s*([^=]*?)(?=,\s*\w+\s*=|$)/g` で key=value を抽出。`hl` の値内カンマ（例: `hl=3,5-7` の `,5-7`）を誤分割しないよう「次の key= が来るまで」を lookahead で吸収する。
+
+- **`cleanupBlock(pre)`**: `blockRefs.get(pre)` から `copyTimerId`（`clearTimeout`）・`copyHandler`（`removeEventListener`）・`hlScrollHandler`（`codeWrap.removeEventListener`）を解除。`codeWrap` の子を全て親に移してから `codeWrap.remove()`（hlOverlay も連れて消える）。`lineNums`・`filenameLabel`・`toolbar` を `.remove()`。`gpcb-enhanced` クラスと `data-gpcb-enhanced` 属性を削除。`<code>` の中身は一切変更しない。`<cite class="code-highlighted-title">` は DOM から削除しない（CSS スコープが外れると自動復帰する）。
 
 - **SPA 遷移検知**: `pushState` / `replaceState` にカスタムイベント `'growi-pcb-navigate'` をモンキーパッチ。`popstate` / `hashchange` も購読し、いずれも 2 段 `requestAnimationFrame` で DOM が安定してから `scanAndEnhance()` を実行。
 
-- **MutationObserver**: `document.body` を `childList: true, subtree: true, attributes: true, attributeFilter: ['class']` で監視。追加ノード判定では **`.gpcb-toolbar` および `.gpcb-filename` を持つ要素はスキップ**して自己追加による無限ループを防ぐ。`body.class` 変化時（編集モード遷移）は `isHiddenContext()` を判定し、true なら全 enhanced `<pre>` を即 `cleanupBlock`、false なら `scheduleScan()`。
+- **MutationObserver**: `document.body` を `childList: true, subtree: true, attributes: true, attributeFilter: ['class']` で監視。追加ノード判定では **`.gpcb-toolbar` / `.gpcb-filename` / `.gpcb-linenums` / `.gpcb-code-wrap` / `.gpcb-hl-overlay` を持つ要素はスキップ**して自己追加による無限ループを防ぐ。Prism が enhance 済み `<pre>` に内側 div を後から挿入・差し替えした場合（`refs.lineNums.isConnected` が false）は scroll リスナーを解除してから `refs.lineNums / codeWrap / hlOverlay / hlScrollHandler` をリセットし `setupLineNumbers` を再実行。`body.class` 変化時（編集モード遷移）は `isHiddenContext()` を判定し、true なら全 enhanced `<pre>` を即 `cleanupBlock`、false なら `scheduleScan()`。
 
 - **`isHiddenContext()`**: `/admin` / `/admin/*` パス、`#edit` / `/edit` サフィックス、`body.editing` / `body.grw-editor-mode` / `body.modal-open` クラスのいずれかで true を返す。
 
@@ -107,7 +118,13 @@ growi-plugin-codeblock-extended/
 | CSS 変数 | `--gpcb-*` |
 | opt-out（コピー） | `data-no-copy` |
 | opt-out（ファイル名ラベル） | `data-no-filename` |
+| opt-out（行番号） | `data-no-linenum` |
 | ファイル名ラベル属性 | `data-gpcb-filename` |
+| 行番号 aside クラス | `gpcb-linenums` |
+| 行番号ハイライトクラス | `gpcb-linenum-hl` |
+| コードスクロールコンテナクラス | `gpcb-code-wrap` |
+| ハイライトオーバーレイクラス | `gpcb-hl-overlay` |
+| ハイライト行クラス | `gpcb-hl-line` / `gpcb-hl-line-hl` |
 | pluginActivators キー | `growi-plugin-codeblock-extended` |
 
 ## ハマりどころ（必読）
@@ -188,6 +205,39 @@ DOM ノード自体は残すこと（`cite.remove()` などはしない）。`un
 ツールバー top        = 4px + 1.55rem + 0.4rem = 4px + 1.95rem
 ```
 
+### 12. Prism 内側 div の `display: flex !important`
+
+行番号 `<aside>` を `<code>` と横並びにするため、Prism 内側 div のインライン `display: block` を CSS で `display: flex !important` に上書きしている。インラインスタイルを上書きするため `!important` が必要。`.gpcb-code-wrap` 側は `flex: 1 1 auto; min-width: 0; overflow-x: auto;` を当てて、横スクロール領域をここに閉じ込める。これにより `<aside>` は自然に左固定になる（`position: sticky` などのハックは不要）。
+
+`unmount()` で `pre.gpcb-enhanced` クラスが外れれば CSS スコープが解除され、Prism 内側 div は元の `display: block` に戻る。
+
+### 13. `{hl=3,5-7}` のカンマ曖昧性とルックアヘッド正規表現
+
+`{start=10,hl=3,5-7}` を単純に `,` で split すると `hl` の値 `3,5-7` が `3` と `5-7` に正しく分割されるが、`{start=10,hl=3,5-7,end=20}` のような形では `end=20` まで `hl` の値に取り込まれてしまう。
+
+解決策: key=value の抽出に「次の `key=` が来るまで」を lookahead で吸収する正規表現を使う:
+```
+/(\w+)\s*=\s*([^=]*?)(?=,\s*\w+\s*=|$)/g
+```
+これで value 部分が「次の `key=` の直前まで」に限定され、`hl` の値内カンマと key 区切りカンマを正しく識別できる。
+
+### 14. ハイライトオーバーレイの flex column 等分割
+
+`<code>` の各行高さを JS で計測せずにオーバーレイ行を各行に揃える手法:
+
+- `.gpcb-code-wrap` の高さ = `<code>` のコンテンツ高さ
+- `.gpcb-hl-overlay` は `position: absolute; top: 0; height: 100%` で code-wrap と同高
+- N 個の `<div class="gpcb-hl-line">` に `flex: 1 1 0` を当てると等分割され、各 div の高さが 1 行分の高さに一致する
+- `getComputedStyle().lineHeight = 'normal'` の解釈がブラウザ依存であることを回避できる
+
+### 15. ハイライトオーバーレイの横スクロール追従
+
+`position: absolute; left: 0; right: 0` を `overflow-x: auto` コンテナ内に置くと、オーバーレイ幅は visible 幅に固定される。スクロールするとオーバーレイも動くが `left: 0; right: 0` は containing block の visible 幅なので、結果として visible 幅の領域しかカバーできない。
+
+解決策: CSS は `left: 0; right: 0` のままとし、JS で scroll イベントに `transform: translateX(scrollLeft)` を適用する。オーバーレイを右へシフトすることで「常に現在の visible 領域をカバー」する効果を得る。layout 計測（`scrollWidth` 等）が不要で、`requestAnimationFrame` 起因のタイミング問題も発生しない。
+
+`code.scrollWidth` を rAF で読んで `width` に設定する方法は **layout が確定していない場合に 0 を返す** ため採用しないこと（実際にハマった）。
+
 ## デプロイ手順
 
 ```bash
@@ -225,6 +275,22 @@ GROWI 管理画面 `/admin/plugins` で **削除 → 再インストール**。
 22. `<pre data-no-copy>` でコピーボタンが非表示になる（ラベルは出る）
 23. 印刷プレビューでラベルが非表示になる
 24. ラベルあり・なしでコピーボタンの位置が揃っている（ともにコードエリア上端から 0.4rem 内側）
+25. 行番号がコードブロック左側に薄いグレーで表示される
+26. 行番号の数が実際のコード行数と一致する（末尾改行は除外）
+27. `<pre data-no-linenum>` で行番号が出ない（コピーボタン・ラベルは出る）
+28. コピーボタンで行番号がクリップボードに混入しない
+29. 横スクロール時に行番号が左に固定される
+30. 印刷プレビューで行番号が非表示になる
+31. `unmount` 後に `<aside class="gpcb-linenums">` / `.gpcb-code-wrap` / `.gpcb-hl-overlay` が消え、Prism 内側 div の flex 上書きが外れる
+32. ` ```python{start=10} ` で行番号が 10 から始まる
+33. ` ```python{hl=3} ` で 3 行目の背景（コード・行番号とも）がハイライトされる
+34. ` ```python{hl=3,5-7} ` で 3・5・6・7 行目がハイライト、4 行目は非ハイライト
+35. ` ```python{start=10,hl=12,14-16} ` で表示番号 12・14・15・16 がハイライト（コード 3・5・6・7 行目）
+36. ` ```python:file.py{start=10,hl=12} ` でファイル名ラベルに「file.py」のみ表示（`{...}` は除去）
+37. ` ```python:file.py ` でファイル名のみ指定でも `{...}` なしで壊れない
+38. `data-no-linenum` 付き `<pre>` はハイライトオーバーレイも生成しない
+39. ハイライト行は横スクロール時も背景が画面端まで継続して表示される
+40. コピーボタンでコピーした内容に行番号・ハイライトオーバーレイの文字が含まれない
 
 ## 会話ガイドライン
 
