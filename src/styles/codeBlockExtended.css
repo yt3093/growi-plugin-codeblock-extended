@@ -141,7 +141,13 @@ pre.gpcb-enhanced > div > code {
 /* 行番号 aside: 横スクロール時も左端に固定 */
 .gpcb-linenums {
   position: sticky;
-  left: 0;
+  /* Prism div の padding-left(1em) 分だけ左に寄せ、パディング領域もカバーする */
+  left: -1em;
+  /* 左パディング領域まで視覚的に延伸 */
+  margin-left: -1em;
+  padding-left: 1em;
+  /* code より前面に描画（DOM 順で code が後ろのため z-index で上書き） */
+  z-index: 1;
   flex: 0 0 auto;
   display: flex;
   flex-direction: column;
