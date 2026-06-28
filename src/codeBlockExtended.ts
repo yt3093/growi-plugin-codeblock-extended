@@ -352,6 +352,22 @@ export function createCodeBlockExtended(): { mount(): void; unmount(): void } {
               continue;
             }
 
+            // Prism が enhance 済み <pre> に後から内側 div を挿入するケース
+            // （enhance 時点では Prism div が未挿入のため setupLineNumbers が空振りした場合の救済）
+            if (
+              m.target.nodeType === Node.ELEMENT_NODE &&
+              (m.target as Element).matches?.(`pre[${ENHANCED_ATTR}]`) &&
+              el.tagName === 'DIV'
+            ) {
+              const parentPre = m.target as HTMLPreElement;
+              const refs = blockRefs.get(parentPre);
+              if (refs && !refs.lineNums) {
+                const code = parentPre.querySelector<HTMLElement>('code');
+                if (code) setupLineNumbers(parentPre, code);
+              }
+              continue;
+            }
+
             if (
               (el.tagName === 'PRE' && !el.hasAttribute(ENHANCED_ATTR)) ||
               el.querySelector(`pre:not([${ENHANCED_ATTR}])`)
