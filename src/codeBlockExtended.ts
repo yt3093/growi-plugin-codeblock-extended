@@ -45,6 +45,7 @@ interface BlockRefs {
   lineNums: HTMLElement | null;
   codeWrap: HTMLDivElement | null;
   hlOverlay: HTMLDivElement | null;
+  hlScrollHandler: (() => void) | null;
   copyBtn: HTMLButtonElement | null;
   copyHandler: ((e: MouseEvent) => void) | null;
   copyTimerId?: number;
@@ -303,15 +304,6 @@ function setupLineNumbers(pre: HTMLPreElement, code: HTMLElement): void {
       hlOverlay.appendChild(row);
     }
     codeWrap.prepend(hlOverlay);
-
-    // content 幅が visible 幅を超える場合、overlay を content 幅まで拡張する。
-    // position:absolute の right:0 は visible 幅に留まるため、scroll 時に overlay が流れるのを防ぐ。
-    requestAnimationFrame(() => {
-      if (hlOverlay!.isConnected) {
-        // right:0 は visible 幅に固定されるため使わず、width を直接設定して content 全幅をカバーする
-        hlOverlay!.style.width = `${code.scrollWidth}px`;
-      }
-    });
   }
 
   inner.prepend(aside);
@@ -321,6 +313,13 @@ function setupLineNumbers(pre: HTMLPreElement, code: HTMLElement): void {
     refs.lineNums = aside;
     refs.codeWrap = codeWrap;
     refs.hlOverlay = hlOverlay;
+    if (hlOverlay) {
+      const onScroll = () => {
+        hlOverlay!.style.transform = `translateX(${codeWrap.scrollLeft}px)`;
+      };
+      codeWrap.addEventListener('scroll', onScroll, { passive: true });
+      refs.hlScrollHandler = onScroll;
+    }
   }
 }
 
@@ -361,7 +360,7 @@ function enhanceCodeBlock(pre: HTMLPreElement): void {
   const toolbar = document.createElement('div');
   toolbar.className = 'gpcb-toolbar';
 
-  blockRefs.set(pre, { toolbar, filenameLabel: null, lineNums: null, codeWrap: null, hlOverlay: null, copyBtn: null, copyHandler: null });
+  blockRefs.set(pre, { toolbar, filenameLabel: null, lineNums: null, codeWrap: null, hlOverlay: null, hlScrollHandler: null, copyBtn: null, copyHandler: null });
 
   setupCopyButton(toolbar, code, pre);
 
@@ -378,6 +377,9 @@ function cleanupBlock(pre: HTMLPreElement): void {
     if (refs.copyTimerId !== undefined) window.clearTimeout(refs.copyTimerId);
     if (refs.copyBtn && refs.copyHandler) {
       refs.copyBtn.removeEventListener('click', refs.copyHandler);
+    }
+    if (refs.hlScrollHandler && refs.codeWrap) {
+      refs.codeWrap.removeEventListener('scroll', refs.hlScrollHandler);
     }
     if (refs.codeWrap?.isConnected) {
       while (refs.codeWrap.firstChild) {
@@ -477,9 +479,13 @@ export function createCodeBlockExtended(): { mount(): void; unmount(): void } {
               const refs = blockRefs.get(parentPre);
               // isConnected で旧 aside が DOM から切り離されていないか確認する
               if (refs && (!refs.lineNums || !refs.lineNums.isConnected)) {
+                if (refs.hlScrollHandler && refs.codeWrap) {
+                  refs.codeWrap.removeEventListener('scroll', refs.hlScrollHandler);
+                }
                 refs.lineNums = null;
                 refs.codeWrap = null;
                 refs.hlOverlay = null;
+                refs.hlScrollHandler = null;
                 const code = parentPre.querySelector<HTMLElement>('code');
                 if (code) setupLineNumbers(parentPre, code);
               }

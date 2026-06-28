@@ -148,12 +148,12 @@ pre.gpcb-enhanced > div > code {
 }
 
 /* ハイライトオーバーレイ: code の上に重ねる。
-   width は JS で code.scrollWidth に合わせて設定（right:0 は visible 幅に固定されるため使わない） */
+   left:0 + right:0 で visible 幅に固定し、scroll イベントで translateX を更新して追従させる */
 .gpcb-hl-overlay {
   position: absolute;
   top: 0;
   left: 0;
-  width: 100%; /* 初期値: visible 幅。rAF 後に JS が content 幅に書き換える */
+  right: 0;
   height: 100%;
   display: flex;
   flex-direction: column;
