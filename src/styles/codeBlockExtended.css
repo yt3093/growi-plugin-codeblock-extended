@@ -103,7 +103,7 @@ pre.gpcb-enhanced .code-highlighted-title {
   width: fit-content;
   max-width: calc(100% - 3rem); /* コピーボタン幅を考慮 */
   padding: 6px 12px 10px;
-  margin: 0 0 -8px 0; /* 下 padding 分コードブロックを引き上げ、裏に潜り込ませる */
+  margin: 0 0 -12px 0; /* 下 padding 分コードブロックを引き上げ、裏に潜り込ませる */
   font-family: var(--bs-font-monospace, ui-monospace, SFMono-Regular, monospace);
   font-size: 0.75rem;
   line-height: 1.4;
