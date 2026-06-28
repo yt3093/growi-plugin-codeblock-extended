@@ -125,22 +125,23 @@ pre.gpcb-enhanced .code-highlighted-title {
   }
 }
 
-/* 行番号と <code> を横並びにする。Prism のインライン style より優先するため !important */
+/* 行番号と <code> を横並びにする。横スクロールは div レベルで管理してバー位置をブロック全幅に揃える */
 pre.gpcb-enhanced > div {
   display: flex !important;
   align-items: stretch;
-}
-
-/* <code> を flex item として横スクロール可能にする
-   min-width: 0 がないと flex 子要素の収縮が効かず横にはみ出す */
-pre.gpcb-enhanced > div > code {
-  flex: 1 1 auto;
-  min-width: 0;
   overflow-x: auto;
 }
 
-/* 行番号 aside */
+/* <code> は flex item として伸びるだけ（overflow は親 div に委譲） */
+pre.gpcb-enhanced > div > code {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* 行番号 aside: 横スクロール時も左端に固定 */
 .gpcb-linenums {
+  position: sticky;
+  left: 0;
   flex: 0 0 auto;
   display: flex;
   flex-direction: column;
