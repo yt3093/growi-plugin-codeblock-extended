@@ -308,7 +308,8 @@ function setupLineNumbers(pre: HTMLPreElement, code: HTMLElement): void {
     // position:absolute の right:0 は visible 幅に留まるため、scroll 時に overlay が流れるのを防ぐ。
     requestAnimationFrame(() => {
       if (hlOverlay!.isConnected) {
-        hlOverlay!.style.minWidth = `${code.scrollWidth}px`;
+        // right:0 は visible 幅に固定されるため使わず、width を直接設定して content 全幅をカバーする
+        hlOverlay!.style.width = `${code.scrollWidth}px`;
       }
     });
   }
