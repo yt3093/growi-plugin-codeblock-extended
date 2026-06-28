@@ -10,9 +10,11 @@
   --gpcb-badge-fill:       rgba(20, 22, 28, 0.85);
 }
 
-/* pre にポジションコンテキストを付与 */
+/* pre にポジションコンテキストを付与。
+   overflow-x: auto をここに置くことで、スクロールバーが Prism div の角丸に干渉しない */
 pre.gpcb-enhanced {
   position: relative;
+  overflow-x: auto;
 }
 
 /* toolbar: デフォルト非表示
@@ -125,27 +127,22 @@ pre.gpcb-enhanced .code-highlighted-title {
   }
 }
 
-/* 行番号と <code> を横並びにする。横スクロールは div レベルで管理してバー位置をブロック全幅に揃える */
+/* 行番号と <code> を横並びにする。スクロールは pre に委譲するため overflow は指定しない */
 pre.gpcb-enhanced > div {
   display: flex !important;
   align-items: stretch;
-  overflow-x: auto;
 }
 
-/* <code> は flex item として伸びるだけ（overflow は親 div に委譲） */
+/* <code> は flex item として伸縮する */
 pre.gpcb-enhanced > div > code {
   flex: 1 1 auto;
   min-width: 0;
 }
 
-/* 行番号 aside: 横スクロール時も左端に固定 */
+/* 行番号 aside: 横スクロール時も左端に固定（sticky 基準は pre） */
 .gpcb-linenums {
   position: sticky;
-  /* Prism div の padding-left(1em) 分だけ左に寄せ、パディング領域もカバーする */
-  left: -1em;
-  /* 左パディング領域まで視覚的に延伸 */
-  margin-left: -1em;
-  padding-left: 1em;
+  left: 0;
   /* code より前面に描画（DOM 順で code が後ろのため z-index で上書き） */
   z-index: 1;
   flex: 0 0 auto;
