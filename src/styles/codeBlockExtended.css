@@ -15,10 +15,11 @@ pre.gpcb-enhanced {
   position: relative;
 }
 
-/* toolbar: デフォルト非表示 */
+/* toolbar: デフォルト非表示
+   top: Prism 内側 div の margin-top (0.5em) + コードブロック内オフセット (0.4rem) */
 .gpcb-toolbar {
   position: absolute;
-  top: 0.4rem;
+  top: calc(0.5em + 0.4rem);
   right: 0.4rem;
   display: flex;
   align-items: center;
@@ -33,6 +34,14 @@ pre.gpcb-enhanced:hover .gpcb-toolbar,
 pre.gpcb-enhanced:focus-within .gpcb-toolbar {
   opacity: 1;
   pointer-events: auto;
+}
+
+/* ファイル名ラベルがある場合: ツールバーをコードブロック本体の上端に固定
+   コードブロック開始位置 = (6px top-pad + 1.05rem text + 10px bottom-pad) - 12px margin + 0.5rem Prism margin
+                         = 4px + 1.55rem
+   + 0.4rem コードブロック内オフセット */
+pre.gpcb-enhanced:has(> .gpcb-filename) .gpcb-toolbar {
+  top: calc(4px + 1.95rem);
 }
 
 /* copy button */
@@ -83,6 +92,31 @@ pre.gpcb-enhanced:has([data-gpcb-copy-btn].gpcb-copy-fail) .gpcb-toolbar {
   fill: var(--gpcb-badge-fill);
 }
 
+/* GROWI デフォルトのファイル名ラベルを非表示（enhanced な pre のみ） */
+pre.gpcb-enhanced .code-highlighted-title {
+  display: none;
+}
+
+/* ファイル名ラベル: コードブロック上部・フロー配置 */
+.gpcb-filename {
+  display: block;
+  width: fit-content;
+  max-width: calc(100% - 3rem); /* コピーボタン幅を考慮 */
+  padding: 6px 12px 10px;
+  margin: 0 0 -12px 0; /* 下 padding 分コードブロックを引き上げ、裏に潜り込ませる */
+  font-family: var(--bs-font-monospace, ui-monospace, SFMono-Regular, monospace);
+  font-size: 0.75rem;
+  line-height: 1.4;
+  color: #ffffffe6;
+  background: #323e52;
+  border-radius: 0.3em 0.3em 0 0;
+  user-select: text;
+  pointer-events: auto;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 /* prefers-reduced-motion: トランジション無効 */
 @media (prefers-reduced-motion: reduce) {
   .gpcb-toolbar,
@@ -91,9 +125,10 @@ pre.gpcb-enhanced:has([data-gpcb-copy-btn].gpcb-copy-fail) .gpcb-toolbar {
   }
 }
 
-/* Print: toolbar を非表示 */
+/* Print: toolbar / filename label を非表示 */
 @media print {
-  .gpcb-toolbar {
+  .gpcb-toolbar,
+  .gpcb-filename {
     display: none;
   }
 }

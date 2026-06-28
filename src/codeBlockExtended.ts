@@ -8,6 +8,11 @@ const COPY_CLASS_FAIL = 'gpcb-copy-fail';
 const COPY_FEEDBACK_MS = 2000;
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
+const NO_FILENAME_ATTR = 'data-no-filename';
+const FILENAME_ATTR = 'data-gpcb-filename';
+const FILENAME_CLASS = 'gpcb-filename';
+const GROWI_FILENAME_SELECTOR = 'cite.code-highlighted-title';
+
 // GROWI のナビバー要素を検索するセレクタ候補（上から順に試す）
 const NAVBAR_SELECTORS = [
   '#grw-contextual-sub-nav',
@@ -22,6 +27,7 @@ type CopyBtnState = 'copy' | 'ok' | 'fail';
 
 interface BlockRefs {
   toolbar: HTMLDivElement;
+  filenameLabel: HTMLSpanElement | null;
   copyBtn: HTMLButtonElement | null;
   copyHandler: ((e: MouseEvent) => void) | null;
   copyTimerId?: number;
@@ -162,7 +168,25 @@ function handleCopyClick(code: HTMLElement, btn: HTMLButtonElement, pre: HTMLPre
 
 // --- setup / enhance / cleanup ---
 
+function setupFilenameLabel(pre: HTMLPreElement): void {
+  if (pre.hasAttribute(NO_FILENAME_ATTR)) return;
+  const cite = pre.querySelector<HTMLElement>(GROWI_FILENAME_SELECTOR);
+  if (!cite) return;
+  const filename = cite.textContent?.trim();
+  if (!filename) return;
+
+  const label = document.createElement('span');
+  label.className = FILENAME_CLASS;
+  label.setAttribute(FILENAME_ATTR, filename);
+  label.textContent = filename;
+  pre.prepend(label);
+
+  const refs = blockRefs.get(pre);
+  if (refs) refs.filenameLabel = label;
+}
+
 function setupCopyButton(toolbar: HTMLDivElement, code: HTMLElement, pre: HTMLPreElement): void {
+  if (pre.hasAttribute(NO_COPY_ATTR)) return;
   if (typeof navigator.clipboard?.writeText !== 'function') return;
 
   const btn = document.createElement('button');
@@ -186,7 +210,6 @@ function setupCopyButton(toolbar: HTMLDivElement, code: HTMLElement, pre: HTMLPr
 
 function isEligible(pre: HTMLPreElement): boolean {
   if (pre.hasAttribute(ENHANCED_ATTR)) return false;
-  if (pre.hasAttribute(NO_COPY_ATTR)) return false;
   if (!pre.querySelector('code')) return false;
   if (isInEditorDOM(pre)) return false;
   return true;
@@ -199,12 +222,13 @@ function enhanceCodeBlock(pre: HTMLPreElement): void {
   const toolbar = document.createElement('div');
   toolbar.className = 'gpcb-toolbar';
 
-  blockRefs.set(pre, { toolbar, copyBtn: null, copyHandler: null });
+  blockRefs.set(pre, { toolbar, filenameLabel: null, copyBtn: null, copyHandler: null });
 
   setupCopyButton(toolbar, code, pre);
 
   pre.classList.add('gpcb-enhanced');
   pre.prepend(toolbar);
+  setupFilenameLabel(pre);
   pre.setAttribute(ENHANCED_ATTR, '1');
 }
 
@@ -215,6 +239,7 @@ function cleanupBlock(pre: HTMLPreElement): void {
     if (refs.copyBtn && refs.copyHandler) {
       refs.copyBtn.removeEventListener('click', refs.copyHandler);
     }
+    refs.filenameLabel?.remove();
     refs.toolbar.remove();
     blockRefs.delete(pre);
   }
@@ -272,8 +297,22 @@ export function createCodeBlockExtended(): { mount(): void; unmount(): void } {
           for (const node of Array.from(m.addedNodes)) {
             if (node.nodeType !== Node.ELEMENT_NODE) continue;
             const el = node as Element;
-            // プラグイン自身が追加した toolbar は無視して無限ループを防ぐ
-            if (el.classList?.contains('gpcb-toolbar')) continue;
+            // プラグイン自身が追加した toolbar / filename label は無視して無限ループを防ぐ
+            if (el.classList?.contains('gpcb-toolbar') || el.classList?.contains(FILENAME_CLASS)) continue;
+
+            // GROWI が enhance 済み <pre> に後から <cite class="code-highlighted-title"> を追加するケース
+            // （enhance 時点で cite がなく setupFilenameLabel が空振りした場合の救済）
+            if (m.target.nodeType === Node.ELEMENT_NODE && el.matches?.(GROWI_FILENAME_SELECTOR)) {
+              const parentPre = (m.target as Element).closest<HTMLPreElement>(`pre[${ENHANCED_ATTR}]`);
+              if (parentPre) {
+                const refs = blockRefs.get(parentPre);
+                if (refs && !refs.filenameLabel) {
+                  setupFilenameLabel(parentPre);
+                }
+              }
+              continue;
+            }
+
             if (
               (el.tagName === 'PRE' && !el.hasAttribute(ENHANCED_ATTR)) ||
               el.querySelector(`pre:not([${ENHANCED_ATTR}])`)
