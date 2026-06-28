@@ -37,11 +37,11 @@ pre.gpcb-enhanced:focus-within .gpcb-toolbar {
 }
 
 /* ファイル名ラベルがある場合: ツールバーをコードブロック本体の上端に固定
-   6px  = ラベルの上 padding のみ（下 padding 20px はコードブロックの裏に隠れる）
-   1.05rem = ラベルのテキスト高さ (0.75rem × line-height 1.4)
-   0.4rem = コードブロック内の標準オフセット */
+   コードブロック開始位置 = (6px top-pad + 1.05rem text + 10px bottom-pad) - 12px margin + 0.5rem Prism margin
+                         = 4px + 1.55rem
+   + 0.4rem コードブロック内オフセット */
 pre.gpcb-enhanced:has(> .gpcb-filename) .gpcb-toolbar {
-  top: calc(6px + 1.05rem + 0.4rem);
+  top: calc(4px + 1.95rem);
 }
 
 /* copy button */
