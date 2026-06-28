@@ -147,7 +147,7 @@ pre.gpcb-enhanced > div > code {
   scrollbar-color: rgba(255, 255, 255, 0.25) transparent;
 }
 
-/* ハイライトオーバーレイ: code-wrap の全高を flex 等分して line-height に自動整合 */
+/* ハイライトオーバーレイ: code の上に重ねる。minWidth は JS で content 幅に合わせて設定 */
 .gpcb-hl-overlay {
   position: absolute;
   top: 0;
@@ -157,7 +157,7 @@ pre.gpcb-enhanced > div > code {
   display: flex;
   flex-direction: column;
   pointer-events: none;
-  z-index: 0;
+  z-index: 2; /* code より上に描画（pointer-events:none で操作は通す） */
 }
 
 .gpcb-hl-line {
@@ -166,13 +166,7 @@ pre.gpcb-enhanced > div > code {
 }
 
 .gpcb-hl-line.gpcb-hl-line-hl {
-  background: rgba(255, 235, 100, 0.10);
-}
-
-/* <code> はオーバーレイより手前に描画 */
-.gpcb-code-wrap > code {
-  position: relative;
-  z-index: 1;
+  background: rgba(255, 235, 100, 0.12);
 }
 
 .gpcb-code-wrap::-webkit-scrollbar {
@@ -193,8 +187,6 @@ pre.gpcb-enhanced > div > code {
   flex: 0 0 auto;
   display: flex;
   flex-direction: column;
-  padding-right: 1em;
-  margin-right: 0.5em;
   font-family: var(--bs-font-monospace, ui-monospace, SFMono-Regular, monospace);
   font-feature-settings: 'tnum';
   text-align: right;
@@ -204,13 +196,16 @@ pre.gpcb-enhanced > div > code {
   pointer-events: none;
 }
 
-.gpcb-linenums > span.gpcb-linenum-hl {
-  background: rgba(255, 235, 100, 0.10);
-  color: rgba(255, 235, 100, 0.9);
-}
-
+/* span に padding-right でコードとの gap を確保。
+   gap が span の border box 内に収まるため、背景色が gap まで途切れなく伸びる */
 .gpcb-linenums > span {
   display: block;
+  padding-right: 1.5em;
+}
+
+.gpcb-linenums > span.gpcb-linenum-hl {
+  background: rgba(255, 235, 100, 0.12);
+  color: rgba(255, 235, 100, 0.9);
 }
 
 /* Print: toolbar / filename label / linenums / hl-overlay を非表示 */

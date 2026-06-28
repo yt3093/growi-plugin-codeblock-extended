@@ -303,6 +303,14 @@ function setupLineNumbers(pre: HTMLPreElement, code: HTMLElement): void {
       hlOverlay.appendChild(row);
     }
     codeWrap.prepend(hlOverlay);
+
+    // content 幅が visible 幅を超える場合、overlay を content 幅まで拡張する。
+    // position:absolute の right:0 は visible 幅に留まるため、scroll 時に overlay が流れるのを防ぐ。
+    requestAnimationFrame(() => {
+      if (hlOverlay!.isConnected) {
+        hlOverlay!.style.minWidth = `${code.scrollWidth}px`;
+      }
+    });
   }
 
   inner.prepend(aside);
