@@ -15,6 +15,7 @@ const GROWI_FILENAME_SELECTOR = 'cite.code-highlighted-title';
 
 const NO_LINENUM_ATTR = 'data-no-linenum';
 const LINENUMS_CLASS = 'gpcb-linenums';
+const CODE_WRAP_CLASS = 'gpcb-code-wrap';
 
 // GROWI のナビバー要素を検索するセレクタ候補（上から順に試す）
 const NAVBAR_SELECTORS = [
@@ -32,6 +33,7 @@ interface BlockRefs {
   toolbar: HTMLDivElement;
   filenameLabel: HTMLSpanElement | null;
   lineNums: HTMLElement | null;
+  codeWrap: HTMLDivElement | null;
   copyBtn: HTMLButtonElement | null;
   copyHandler: ((e: MouseEvent) => void) | null;
   copyTimerId?: number;
@@ -212,10 +214,20 @@ function setupLineNumbers(pre: HTMLPreElement, code: HTMLElement): void {
     span.textContent = String(i);
     aside.appendChild(span);
   }
+
+  // <code> を横スクロールコンテナで包む（aside を scroll の外に出して左固定を実現）
+  const codeWrap = document.createElement('div');
+  codeWrap.className = CODE_WRAP_CLASS;
+  code.parentNode!.insertBefore(codeWrap, code);
+  codeWrap.appendChild(code);
+
   inner.prepend(aside);
 
   const refs = blockRefs.get(pre);
-  if (refs) refs.lineNums = aside;
+  if (refs) {
+    refs.lineNums = aside;
+    refs.codeWrap = codeWrap;
+  }
 }
 
 function setupCopyButton(toolbar: HTMLDivElement, code: HTMLElement, pre: HTMLPreElement): void {
@@ -255,7 +267,7 @@ function enhanceCodeBlock(pre: HTMLPreElement): void {
   const toolbar = document.createElement('div');
   toolbar.className = 'gpcb-toolbar';
 
-  blockRefs.set(pre, { toolbar, filenameLabel: null, lineNums: null, copyBtn: null, copyHandler: null });
+  blockRefs.set(pre, { toolbar, filenameLabel: null, lineNums: null, codeWrap: null, copyBtn: null, copyHandler: null });
 
   setupCopyButton(toolbar, code, pre);
 
@@ -272,6 +284,12 @@ function cleanupBlock(pre: HTMLPreElement): void {
     if (refs.copyTimerId !== undefined) window.clearTimeout(refs.copyTimerId);
     if (refs.copyBtn && refs.copyHandler) {
       refs.copyBtn.removeEventListener('click', refs.copyHandler);
+    }
+    if (refs.codeWrap?.isConnected) {
+      while (refs.codeWrap.firstChild) {
+        refs.codeWrap.parentNode!.insertBefore(refs.codeWrap.firstChild, refs.codeWrap);
+      }
+      refs.codeWrap.remove();
     }
     refs.lineNums?.remove();
     refs.filenameLabel?.remove();
@@ -336,7 +354,8 @@ export function createCodeBlockExtended(): { mount(): void; unmount(): void } {
             if (
               el.classList?.contains('gpcb-toolbar') ||
               el.classList?.contains(FILENAME_CLASS) ||
-              el.classList?.contains(LINENUMS_CLASS)
+              el.classList?.contains(LINENUMS_CLASS) ||
+              el.classList?.contains(CODE_WRAP_CLASS)
             ) continue;
 
             // GROWI が enhance 済み <pre> に後から <cite class="code-highlighted-title"> を追加するケース
@@ -364,6 +383,7 @@ export function createCodeBlockExtended(): { mount(): void; unmount(): void } {
               // isConnected で旧 aside が DOM から切り離されていないか確認する
               if (refs && (!refs.lineNums || !refs.lineNums.isConnected)) {
                 refs.lineNums = null;
+                refs.codeWrap = null;
                 const code = parentPre.querySelector<HTMLElement>('code');
                 if (code) setupLineNumbers(parentPre, code);
               }

@@ -125,47 +125,46 @@ pre.gpcb-enhanced .code-highlighted-title {
   }
 }
 
-/* 行番号と <code> を横並びにする。スクロールは pre に委譲するため overflow は指定しない */
+/* 行番号と <code> を横並びにする。スクロールは gpcb-code-wrap に委譲するため overflow は指定しない */
 pre.gpcb-enhanced > div {
   display: flex !important;
   align-items: stretch;
-  overflow-x: auto;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.25) transparent;
 }
 
-/* スクロールバートラックを透明にして Prism div の角丸を維持する */
-pre.gpcb-enhanced > div::-webkit-scrollbar {
-  height: 6px;
-}
-
-pre.gpcb-enhanced > div::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-pre.gpcb-enhanced > div::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.25);
-  border-radius: 3px;
-}
-
-/* <code> は flex item として伸縮する */
+/* data-no-linenum 時: <code> が直接 flex item になるため伸縮させる */
 pre.gpcb-enhanced > div > code {
   flex: 1 1 auto;
   min-width: 0;
 }
 
-/* 行番号 aside: 横スクロール時も左端に固定（sticky 基準は pre） */
+/* コードのスクロールコンテナ: aside の外にあるため aside は常に左端に固定される */
+.gpcb-code-wrap {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.25) transparent;
+}
+
+.gpcb-code-wrap::-webkit-scrollbar {
+  height: 6px;
+}
+
+.gpcb-code-wrap::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.gpcb-code-wrap::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.25);
+  border-radius: 3px;
+}
+
+/* 行番号 aside: gpcb-code-wrap の外に配置されるため横スクロールの影響を受けず常に左端に表示 */
 .gpcb-linenums {
-  position: sticky;
-  left: 0;
-  /* code より前面に描画（DOM 順で code が後ろのため z-index で上書き） */
-  z-index: 1;
   flex: 0 0 auto;
   display: flex;
   flex-direction: column;
-  padding-left: 1em;
   padding-right: 1em;
-  margin-left: -1em;
   margin-right: 0.5em;
   font-family: var(--bs-font-monospace, ui-monospace, SFMono-Regular, monospace);
   font-feature-settings: 'tnum';
