@@ -10,7 +10,7 @@
 
 | 機能 | 説明 |
 |---|---|
-| ファイル名ラベル | `言語:ファイル名` 記法時のみ、コードブロック左上に小サイズで密着表示。GROWI デフォルトの `<cite class="code-highlighted-title">` は CSS で非表示にして置き換える。`data-no-filename` で opt-out |
+| ファイル名ラベル | `言語:ファイル名` 記法時のみ、コードブロック左上にタブ風で表示。コードブロック本体の下レイヤーに配置し（`padding-bottom` + 負の `margin-bottom` で底部を潜り込ませる）、ラベルテキストは選択可能。GROWI デフォルトの `<cite class="code-highlighted-title">` は CSS で非表示にして置き換える。`data-no-filename` で opt-out |
 | コピーボタン | コードブロック右上にボタンを**ホバー時のみ表示**（Zenn 風 UI）。クリックで `<code>` の `textContent` をクリップボードにコピー |
 | 成功/失敗フィードバック | コピー成功時: 2 秒間 ✓ バッジ + アイコン緑変化。失敗時: ✕ アイコン赤変化（2 秒後に元に戻る） |
 | `navigator.clipboard` 非対応 | ボタンを非生成（早期 return） |
@@ -173,6 +173,21 @@ GROWI は ` ```言語:ファイル名 ` 記法で `<pre>` の中に `<cite class
 
 DOM ノード自体は残すこと（`cite.remove()` などはしない）。`unmount()` で `pre.gpcb-enhanced` クラスが外れれば CSS スコープが解除され、GROWI デフォルト表示に自動復帰する。
 
+### 11. ファイル名ラベルのレイヤー配置（CSS のみで実現）
+
+ラベル（`.gpcb-filename`）はコードブロック本体（Prism の内側 `<div>`）の **下レイヤー**に見えるよう配置する。JS は使わず CSS のみで実現している。
+
+- **`padding-bottom: 10px`**: ラベル下部に余白を設ける
+- **`margin-bottom: -12px`**: コードブロックをラベル底部まで引き上げ、底部 `padding` をコードブロックの背景で覆う
+- **DOM 順序**: `<span class="gpcb-filename">` が先、Prism 内側 `<div>` が後 → 後から来る要素が前の要素を上書き描画するため、JS や `z-index` 操作なしでコードブロックがラベル上に重なる
+
+ツールバーのトップ位置（`:has(> .gpcb-filename)` ルール）はラベルの各寸法を考慮した `calc()` 式で計算する:
+```
+コードブロック開始位置 = top-pad(6px) + text(1.05rem) + bottom-pad(10px) + margin(-12px) + Prism margin(0.5rem)
+                       = 4px + 1.55rem
+ツールバー top        = 4px + 1.55rem + 0.4rem = 4px + 1.95rem
+```
+
 ## デプロイ手順
 
 ```bash
@@ -203,6 +218,13 @@ GROWI 管理画面 `/admin/plugins` で **削除 → 再インストール**。
 15. プラグイン無効化（`unmount`）で全 `<pre>` から `gpcb-*` クラス・`data-gpcb-enhanced`・toolbar が完全に消える
 16. `<code>` の innerHTML が処理前後で完全一致（差分ゼロ）
 17. `.CodeMirror` / `.cm-editor` 配下の `<pre>` にはボタンが出ない（GROWI エディタとの競合なし）
+18. ` ```hcl:test.tf ``` 形式でコードブロック左上にファイル名ラベルが表示される
+19. ` ```hcl ``` （ファイル名なし）ではラベルが出ない
+20. ラベルテキストをマウスで選択・コピーできる
+21. `<pre data-no-filename>` でラベルが非表示になる（コピーボタンは出る）
+22. `<pre data-no-copy>` でコピーボタンが非表示になる（ラベルは出る）
+23. 印刷プレビューでラベルが非表示になる
+24. ラベルあり・なしでコピーボタンの位置が揃っている（ともにコードエリア上端から 0.4rem 内側）
 
 ## 会話ガイドライン
 
