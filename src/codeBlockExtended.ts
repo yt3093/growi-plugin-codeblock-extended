@@ -142,6 +142,30 @@ function makeCopyOkIcon(): SVGSVGElement {
   return svg;
 }
 
+function appendPlusMinusBadge(svg: SVGSVGElement): void {
+  svg.appendChild(createSvgEl('circle', {
+    cx: '18', cy: '18', r: '5.5',
+    stroke: 'currentColor', 'stroke-width': '1.5',
+    class: 'gpcb-copy-badge-bg',
+  }));
+  // ± 記号: 上部に + (水平 + 垂直)、下部に − (水平)
+  svg.appendChild(createSvgEl('path', {
+    d: 'M16 16 H20 M18 13.5 V18.5 M16 20.5 H20',
+    stroke: 'currentColor', 'stroke-width': '1.8',
+    'stroke-linecap': 'round',
+    fill: 'none',
+  }));
+}
+
+function makeCopyOkRawIcon(): SVGSVGElement {
+  const svg = buildSvg([
+    { tag: 'rect', attrs: { width: '14', height: '14', x: '8', y: '8', rx: '2', ry: '2' } },
+    { tag: 'path', attrs: { d: 'M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2' } },
+  ]);
+  appendPlusMinusBadge(svg);
+  return svg;
+}
+
 function makeFailIcon(): SVGSVGElement {
   return buildSvg([
     { tag: 'path', attrs: { d: 'M18 6 6 18' } },
@@ -161,7 +185,7 @@ const COPY_BTN_STATE_MAP: Record<CopyBtnState, { icon: () => SVGSVGElement; labe
     className: COPY_CLASS_OK,
   },
   'ok-raw': {
-    icon: makeCopyOkIcon,
+    icon: makeCopyOkRawIcon,
     label: 'diff 全体をクリップボードにコピーしました',
     className: COPY_CLASS_OK_RAW,
   },
