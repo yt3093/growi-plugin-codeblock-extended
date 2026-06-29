@@ -3,6 +3,7 @@ import './styles/codeBlockExtended.css';
 const ENHANCED_ATTR = 'data-gpcb-enhanced';
 const NO_COPY_ATTR = 'data-no-copy';
 const COPY_BTN_ATTR = 'data-gpcb-copy-btn';
+const COPY_BTN_DIFF_ATTR = 'data-gpcb-copy-diff';
 const COPY_CLASS_OK = 'gpcb-copy-ok';
 const COPY_CLASS_OK_RAW = 'gpcb-copy-ok-raw';
 const COPY_CLASS_FAIL = 'gpcb-copy-fail';
@@ -203,6 +204,11 @@ function setCopyBtnState(btn: HTMLButtonElement, state: CopyBtnState): void {
   if (cfg.className) btn.classList.add(cfg.className);
   btn.setAttribute('aria-label', cfg.label);
   btn.title = cfg.label;
+  if (state === 'copy' && btn.hasAttribute(COPY_BTN_DIFF_ATTR)) {
+    const diffLabel = 'コードをコピー (Shift+クリック: diff 全体をコピー)';
+    btn.setAttribute('aria-label', diffLabel);
+    btn.title = diffLabel;
+  }
   btn.appendChild(cfg.icon());
 }
 
@@ -516,6 +522,7 @@ function setupCopyButton(toolbar: HTMLDivElement, code: HTMLElement, pre: HTMLPr
   const btn = document.createElement('button');
   btn.type = 'button';
   btn.setAttribute(COPY_BTN_ATTR, '1');
+  if (isDiffTarget(pre, code)) btn.setAttribute(COPY_BTN_DIFF_ATTR, '1');
   setCopyBtnState(btn, 'copy');
 
   const copyHandler = (e: MouseEvent) => {
