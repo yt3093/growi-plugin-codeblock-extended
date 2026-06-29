@@ -26,6 +26,7 @@
 | コードスクロールコンテナ | `<code>` を `<div class="gpcb-code-wrap">` で包んで `overflow-x: auto` をここに限定。`<aside>` は flex item として外側に置くため横スクロール時に左固定になる（`position: sticky` 不要） |
 | 開始行番号指定 | コードフェンスに `{start=N}` を付けると行番号を N から開始。`findLinenumSpec` で `<code>` className または `<cite>` テキストから `{...}` を抽出し、`parseLinenumSpec` で解析 |
 | 行ハイライト | `{hl=行番号[,範囲...]}` で指定行の背景を強調。コード側は `.gpcb-code-wrap` 内の絶対配置 flex column オーバーレイ（`.gpcb-hl-overlay`）、行番号 aside 側は対応 `<span>` に `.gpcb-linenum-hl` クラスを付与 |
+| 差分表示 | `language-diff` ブロックまたは `{diff}` 修飾子付きブロックで diff ガター（`<aside class="gpcb-diff-gutter">`）と背景オーバーレイを生成。追加行=緑・削除行=赤・ハンク行=紫。`language-diff` ブロックは Prism/Shiki のトークン背景色を `background: none !important` でリセット（文字色は残す）。行番号は自動無効化。`data-no-diff` で opt-out |
 | ハイライト横スクロール追従 | オーバーレイは `left: 0; right: 0`（visible 幅固定）。`codeWrap` の scroll イベントで `hlOverlay.style.transform = translateX(scrollLeft)` を更新しビューポート追従させる（layout 計測不要） |
 | 印刷 | `@media print` で `.gpcb-toolbar` / `.gpcb-linenums` / `.gpcb-hl-overlay` を非表示 |
 
@@ -36,6 +37,8 @@
 | Step 4 | 折りたたみ（行数閾値超過時に max-height 制限 + 展開ボタン） | `data-no-fold` |
 | Step 5 | 全画面（`<dialog>` に `cloneNode(true)` してモーダル表示、Esc で閉じる） | `data-no-full` |
 | Step 6+ | ユーザーと 1 つずつ相談しながら追加 | — |
+
+> **実装済み追加機能（ロードマップ外）**: 差分表示（Step 3.5 相当）
 
 ## アーキテクチャ
 
@@ -98,6 +101,10 @@ growi-plugin-codeblock-extended/
 
 - **`parseLinenumSpec(inner)`**: ルックアヘッド正規表現 `/(\w+)\s*=\s*([^=]*?)(?=,\s*\w+\s*=|$)/g` で key=value を抽出。`hl` の値内カンマ（例: `hl=3,5-7` の `,5-7`）を誤分割しないよう「次の key= が来るまで」を lookahead で吸収する。
 
+- **`isDiffTarget(pre, code)`**: `isDiffBlock(code)`（`language-diff` クラス判定）または `hasDiffModifier(pre, code)`（`{diff}` 修飾子判定）のいずれかが true なら diff ブロックと見なす。`hasDiffModifier` は `findLinenumSpec` でスペック文字列を取得し、カンマ区切りで分割して `'diff'` と完全一致するパートがあるかを確認する。
+
+- **`setupDiffView(pre, code)`**: `setupLineNumbers` と同様の構造で、①行テキストを改行分割 ②各行を `classifyDiffLine`（`@@` → hunk、`+++`/`---` → context、`+` → added、`-` → removed、他 → context）で分類 ③`<aside class="gpcb-diff-gutter">` にガター記号 span を生成 ④`<div class="gpcb-hl-overlay gpcb-diff-overlay">` に行分の div を生成（added/removed/hunk に対応クラス付与）⑤`<code>` を `<div class="gpcb-code-wrap">` で包む ⑥scroll リスナー登録。`data-no-diff` 属性があれば早期 return。行番号は生成しない（diff ブロックは自動的に行番号無効）。
+
 - **`cleanupBlock(pre)`**: `blockRefs.get(pre)` から `copyTimerId`（`clearTimeout`）・`copyHandler`（`removeEventListener`）・`hlScrollHandler`（`codeWrap.removeEventListener`）を解除。`codeWrap` の子を全て親に移してから `codeWrap.remove()`（hlOverlay も連れて消える）。`lineNums`・`filenameLabel`・`toolbar` を `.remove()`。`gpcb-enhanced` クラスと `data-gpcb-enhanced` 属性を削除。`<code>` の中身は一切変更しない。`<cite class="code-highlighted-title">` は DOM から削除しない（CSS スコープが外れると自動復帰する）。
 
 - **SPA 遷移検知**: `pushState` / `replaceState` にカスタムイベント `'growi-pcb-navigate'` をモンキーパッチ。`popstate` / `hashchange` も購読し、いずれも 2 段 `requestAnimationFrame` で DOM が安定してから `scanAndEnhance()` を実行。
@@ -119,12 +126,16 @@ growi-plugin-codeblock-extended/
 | opt-out（コピー） | `data-no-copy` |
 | opt-out（ファイル名ラベル） | `data-no-filename` |
 | opt-out（行番号） | `data-no-linenum` |
+| opt-out（差分表示） | `data-no-diff` |
 | ファイル名ラベル属性 | `data-gpcb-filename` |
 | 行番号 aside クラス | `gpcb-linenums` |
 | 行番号ハイライトクラス | `gpcb-linenum-hl` |
 | コードスクロールコンテナクラス | `gpcb-code-wrap` |
 | ハイライトオーバーレイクラス | `gpcb-hl-overlay` |
 | ハイライト行クラス | `gpcb-hl-line` / `gpcb-hl-line-hl` |
+| diff ガタークラス | `gpcb-diff-gutter` |
+| diff ガター記号クラス | `gpcb-diff-add` / `gpcb-diff-rm` / `gpcb-diff-hh` |
+| diff オーバーレイ行クラス | `gpcb-diff-line-add` / `gpcb-diff-line-rm` / `gpcb-diff-line-hh` |
 | pluginActivators キー | `growi-plugin-codeblock-extended` |
 
 ## ハマりどころ（必読）
@@ -230,7 +241,19 @@ DOM ノード自体は残すこと（`cite.remove()` などはしない）。`un
 - N 個の `<div class="gpcb-hl-line">` に `flex: 1 1 0` を当てると等分割され、各 div の高さが 1 行分の高さに一致する
 - `getComputedStyle().lineHeight = 'normal'` の解釈がブラウザ依存であることを回避できる
 
-### 15. ハイライトオーバーレイの横スクロール追従
+### 16. `{diff}` 修飾子は `言語:{diff}`（コロンあり）でなければならない
+
+`python{diff}` と書いても `{diff}` は GROWI の DOM に現れないため、このプラグインは diff ブロックを検出できない。
+
+**理由**: GROWI のコードフェンスパーサーは `:` をセパレータとして `言語:ファイル名` 形式を処理し、ファイル名部分を `<cite class="code-highlighted-title">` に書き出す。`python:{diff}` と書けば `{diff}` が `<cite>` に入り、`findLinenumSpec` が検出できる。コロンなしで `python{diff}` と書いた場合は `{...}` が `<code>` のクラス名にも `<cite>` にも現れない（GROWI/Prism のクラス正規化で消える）ため、このプラグイン側での対応は不可能。
+
+- ✓ `python:{diff}` — cite に `{diff}` が入る → 検出可
+- ✗ `python{diff}` — DOM に `{diff}` が残らない → 検出不可
+- ✓ `python:src/app.py{diff}` — cite に `src/app.py{diff}` が入る → ファイル名 `src/app.py` を表示し、`{diff}` を検出
+
+なお `setupFilenameLabel` 内の `replace(/\s*\{[^}]*\}\s*$/, '')` で `{...}` は除去されるため、`python:{diff}` のときファイル名ラベルは表示されない（空文字列になり早期 return）。
+
+### 17. ハイライトオーバーレイの横スクロール追従
 
 `position: absolute; left: 0; right: 0` を `overflow-x: auto` コンテナ内に置くと、オーバーレイ幅は visible 幅に固定される。スクロールするとオーバーレイも動くが `left: 0; right: 0` は containing block の visible 幅なので、結果として visible 幅の領域しかカバーできない。
 
@@ -291,6 +314,17 @@ GROWI 管理画面 `/admin/plugins` で **削除 → 再インストール**。
 38. `data-no-linenum` 付き `<pre>` はハイライトオーバーレイも生成しない
 39. ハイライト行は横スクロール時も背景が画面端まで継続して表示される
 40. コピーボタンでコピーした内容に行番号・ハイライトオーバーレイの文字が含まれない
+41. ` ```diff ` ブロックで追加行（`+`）が緑背景・削除行（`-`）が赤背景・ハンク行（`@@`）が紫背景で表示される
+42. ` ```diff ` ブロックの左ガターに `+` / `−` / `@` 記号が表示される
+43. `+++` / `---` で始まるファイルヘッダー行は context 扱い（色なし）
+44. ` ```python:{diff} ` でシンタックスハイライト（Python 色）と diff 背景色・ガターが共存する
+45. ` ```python:src/app.py{diff} ` でファイル名ラベル・シンタックスハイライト・diff 表示が共存する
+46. `python:{diff}` のとき `{diff}` がファイル名ラベルに表示されない
+47. ` ```python{diff} ` （コロンなし）は diff 表示にならず通常の Python コードブロックとして扱われる（GROWI の DOM 制約による仕様）
+48. `<pre data-no-diff>` で diff ガター・背景色が非表示になる（コピーボタン・ファイル名ラベルは出る）
+49. diff ブロックで行番号が表示されない
+50. diff ブロックの横スクロール時に背景色オーバーレイが追従する
+51. `unmount` 後に `<aside class="gpcb-diff-gutter">` / `.gpcb-diff-overlay` が DOM から消える
 
 ## 会話ガイドライン
 
