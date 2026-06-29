@@ -273,3 +273,17 @@ pre.gpcb-enhanced code.language-diff .token {
 .gpcb-hl-line.gpcb-diff-line-hh {
   background: var(--gpcb-diff-hunk-bg, rgba(163, 113, 247, 0.10));
 }
+
+/* diff ブロックの行番号列: 行の種別に対応した背景色を付与し、
+   コードエリアのオーバーレイと視覚的に揃える */
+.gpcb-linenums > span.gpcb-diff-linenum-add {
+  background: var(--gpcb-diff-add-bg, rgba(46, 160, 67, 0.18));
+}
+
+.gpcb-linenums > span.gpcb-diff-linenum-rm {
+  background: var(--gpcb-diff-rm-bg, rgba(248, 81, 73, 0.18));
+}
+
+.gpcb-linenums > span.gpcb-diff-linenum-hh {
+  background: var(--gpcb-diff-hunk-bg, rgba(163, 113, 247, 0.10));
+}

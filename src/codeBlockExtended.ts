@@ -30,6 +30,9 @@ const DIFF_GUTTER_HH_CLASS = 'gpcb-diff-hh';
 const DIFF_LINE_ADD_CLASS = 'gpcb-diff-line-add';
 const DIFF_LINE_RM_CLASS = 'gpcb-diff-line-rm';
 const DIFF_LINE_HH_CLASS = 'gpcb-diff-line-hh';
+const DIFF_LINENUM_ADD_CLASS = 'gpcb-diff-linenum-add';
+const DIFF_LINENUM_RM_CLASS = 'gpcb-diff-linenum-rm';
+const DIFF_LINENUM_HH_CLASS = 'gpcb-diff-linenum-hh';
 
 // GROWI のナビバー要素を検索するセレクタ候補（上から順に試す）
 const NAVBAR_SELECTORS = [
@@ -286,9 +289,23 @@ function setupDiffView(pre: HTMLPreElement, code: HTMLElement): void {
   if (stripped === '') return;
   const lines = stripped.split('\n');
 
-  const aside = document.createElement('aside');
-  aside.className = DIFF_GUTTER_CLASS;
-  aside.setAttribute('aria-hidden', 'true');
+  // {start=N} を解析して新ファイル側の開始行番号を決定
+  const showLineNums = !pre.hasAttribute(NO_LINENUM_ATTR);
+  let afterLineNum = 1;
+  if (showLineNums) {
+    const specStr = findLinenumSpec(pre, code);
+    if (specStr) afterLineNum = parseLinenumSpec(specStr).start;
+  }
+
+  const linenumsAside = showLineNums ? document.createElement('aside') : null;
+  if (linenumsAside) {
+    linenumsAside.className = LINENUMS_CLASS;
+    linenumsAside.setAttribute('aria-hidden', 'true');
+  }
+
+  const diffGutter = document.createElement('aside');
+  diffGutter.className = DIFF_GUTTER_CLASS;
+  diffGutter.setAttribute('aria-hidden', 'true');
 
   const hlOverlay = document.createElement('div');
   hlOverlay.className = `${HL_OVERLAY_CLASS} gpcb-diff-overlay`;
@@ -297,21 +314,34 @@ function setupDiffView(pre: HTMLPreElement, code: HTMLElement): void {
   for (const line of lines) {
     const type = classifyDiffLine(line);
 
+    // 行番号列: context / added のみカウントアップ、removed / hunk は空白
+    if (linenumsAside) {
+      const numSpan = document.createElement('span');
+      numSpan.textContent = (type === 'context' || type === 'added') ? String(afterLineNum) : ' ';
+      if (type === 'added') numSpan.classList.add(DIFF_LINENUM_ADD_CLASS);
+      else if (type === 'removed') numSpan.classList.add(DIFF_LINENUM_RM_CLASS);
+      else if (type === 'hunk') numSpan.classList.add(DIFF_LINENUM_HH_CLASS);
+      linenumsAside.appendChild(numSpan);
+    }
+    if (type === 'context' || type === 'added') afterLineNum++;
+
+    // diff ガター列
     const span = document.createElement('span');
     if (type === 'added') {
       span.textContent = '+';
       span.classList.add(DIFF_GUTTER_ADD_CLASS);
     } else if (type === 'removed') {
-      span.textContent = '−'; // 減算記号（−）
+      span.textContent = '\u2212'; // minus sign
       span.classList.add(DIFF_GUTTER_RM_CLASS);
     } else if (type === 'hunk') {
       span.textContent = '@';
       span.classList.add(DIFF_GUTTER_HH_CLASS);
     } else {
-      span.textContent = ' '; // nbsp（高さ確保）
+      span.textContent = ' ';
     }
-    aside.appendChild(span);
+    diffGutter.appendChild(span);
 
+    // 背景オーバーレイ行
     const row = document.createElement('div');
     row.className = HL_LINE_CLASS;
     if (type === 'added') row.classList.add(DIFF_LINE_ADD_CLASS);
@@ -326,11 +356,15 @@ function setupDiffView(pre: HTMLPreElement, code: HTMLElement): void {
   codeWrap.appendChild(code);
   codeWrap.prepend(hlOverlay);
 
-  inner.prepend(aside);
+  // DOM 順: [linenum] [diff-gutter] [code-wrap]
+  // prepend は先頭挿入なので逆順で呼ぶ
+  inner.prepend(diffGutter);
+  if (linenumsAside) inner.prepend(linenumsAside);
 
   const refs = blockRefs.get(pre);
   if (refs) {
-    refs.diffGutter = aside;
+    refs.lineNums = linenumsAside;
+    refs.diffGutter = diffGutter;
     refs.codeWrap = codeWrap;
     refs.hlOverlay = hlOverlay;
     const onScroll = () => {
