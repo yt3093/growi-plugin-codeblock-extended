@@ -187,8 +187,9 @@ function flashCopyState(btn: HTMLButtonElement, state: 'ok' | 'fail', pre: HTMLP
   if (refs) refs.copyTimerId = id;
 }
 
-function handleCopyClick(code: HTMLElement, btn: HTMLButtonElement, pre: HTMLPreElement): void {
-  const text = code.textContent ?? '';
+function handleCopyClick(e: MouseEvent, code: HTMLElement, btn: HTMLButtonElement, pre: HTMLPreElement): void {
+  const rawText = code.textContent ?? '';
+  const text = (!e.shiftKey && isDiffTarget(pre, code)) ? extractNewCode(rawText) : rawText;
   navigator.clipboard.writeText(text).then(
     () => flashCopyState(btn, 'ok', pre),
     (err) => {
@@ -272,6 +273,19 @@ function classifyDiffLine(line: string): DiffLineType {
   if (line.startsWith('+')) return 'added';
   if (line.startsWith('-')) return 'removed';
   return 'context';
+}
+
+function extractNewCode(text: string): string {
+  const stripped = text.endsWith('\n') ? text.slice(0, -1) : text;
+  return stripped
+    .split('\n')
+    .flatMap(line => {
+      const type = classifyDiffLine(line);
+      if (type === 'hunk' || type === 'removed') return [];
+      if (type === 'added') return [line.slice(1)];
+      return [line.startsWith(' ') ? line.slice(1) : line];
+    })
+    .join('\n');
 }
 
 function setupDiffView(pre: HTMLPreElement, code: HTMLElement): void {
@@ -475,7 +489,7 @@ function setupCopyButton(toolbar: HTMLDivElement, code: HTMLElement, pre: HTMLPr
 
   const copyHandler = (e: MouseEvent) => {
     e.preventDefault();
-    handleCopyClick(code, btn, pre);
+    handleCopyClick(e, code, btn, pre);
   };
   btn.addEventListener('click', copyHandler);
   toolbar.appendChild(btn);
