@@ -11,8 +11,9 @@
 | 機能 | 説明 |
 |---|---|
 | ファイル名ラベル | `言語:ファイル名` 記法時のみ、コードブロック左上にタブ風で表示。コードブロック本体の下レイヤーに配置し（`padding-bottom` + 負の `margin-bottom` で底部を潜り込ませる）、ラベルテキストは選択可能。GROWI デフォルトの `<cite class="code-highlighted-title">` は CSS で非表示にして置き換える。`data-no-filename` で opt-out |
-| コピーボタン | コードブロック右上にボタンを**ホバー時のみ表示**（Zenn 風 UI）。クリックで `<code>` の `textContent` をクリップボードにコピー |
-| 成功/失敗フィードバック | コピー成功時: 2 秒間 ✓ バッジ + アイコン緑変化。失敗時: ✕ アイコン赤変化（2 秒後に元に戻る） |
+| コピーボタン | コードブロック右上にボタンを**ホバー時のみ表示**（Zenn 風 UI）。通常クリックで `<code>` の `textContent` をコピー。diff ブロックでは通常クリック=新コードのみ（`+`/空白行から先頭記号を除去・削除行/ハンク行を除外）、Shift+クリック=raw diff テキスト |
+| 成功/失敗フィードバック | 通常コピー成功: 2 秒間 ✓ バッジ（緑）。diff raw コピー成功: 2 秒間 ± バッジ（青）。失敗: ✕ アイコン（赤）。2 秒後に元に戻る |
+| コピーボタン tooltip | ホバー時に `data-gpcb-tooltip` 属性値をカスタム CSS tooltip で表示（0.2s 遅延後 0.1s で表示、マウスが外れると 1.5s でゆっくり消える）。diff ブロックでは "Shift+Click: Copy RAW Diff" のヒントをツールチップに含める |
 | `navigator.clipboard` 非対応 | ボタンを非生成（早期 return） |
 | opt-out 属性 | `<pre data-no-copy>` でコピーボタンを非表示（ソート等は無関係） |
 | 非表示条件 | 編集モード（`/edit`, `#edit`, `body.editing`, `body.grw-editor-mode`, `body.modal-open`）・管理画面（`/admin`）・印刷時はボタン非表示 |
@@ -26,7 +27,7 @@
 | コードスクロールコンテナ | `<code>` を `<div class="gpcb-code-wrap">` で包んで `overflow-x: auto` をここに限定。`<aside>` は flex item として外側に置くため横スクロール時に左固定になる（`position: sticky` 不要） |
 | 開始行番号指定 | コードフェンスに `{start=N}` を付けると行番号を N から開始。`findLinenumSpec` で `<code>` className または `<cite>` テキストから `{...}` を抽出し、`parseLinenumSpec` で解析 |
 | 行ハイライト | `{hl=行番号[,範囲...]}` で指定行の背景を強調。コード側は `.gpcb-code-wrap` 内の絶対配置 flex column オーバーレイ（`.gpcb-hl-overlay`）、行番号 aside 側は対応 `<span>` に `.gpcb-linenum-hl` クラスを付与 |
-| 差分表示 | `language-diff` ブロックまたは `{diff}` 修飾子付きブロックで diff ガター（`<aside class="gpcb-diff-gutter">`）と背景オーバーレイを生成。追加行=緑・削除行=赤・ハンク行=紫。`language-diff` ブロックは Prism/Shiki のトークン背景色を `background: none !important` でリセット（文字色は残す）。行番号は自動無効化。`data-no-diff` で opt-out |
+| 差分表示 | `language-diff` ブロックまたは `{diff}` 修飾子付きブロックで diff ガター（`<aside class="gpcb-diff-gutter">`）と背景オーバーレイを生成。追加行=緑・削除行=赤・ハンク行=紫。`language-diff` ブロックは Prism/Shiki のトークン背景色を `background: none !important` でリセット（文字色は残す）。行番号は追加/コンテキスト行にのみ付与（削除行・ハンク行はカウントしない）。`{start=N}` で開始番号指定可能。`data-no-diff` で opt-out |
 | ハイライト横スクロール追従 | オーバーレイは `left: 0; right: 0`（visible 幅固定）。`codeWrap` の scroll イベントで `hlOverlay.style.transform = translateX(scrollLeft)` を更新しビューポート追従させる（layout 計測不要） |
 | 印刷 | `@media print` で `.gpcb-toolbar` / `.gpcb-linenums` / `.gpcb-hl-overlay` を非表示 |
 
@@ -89,11 +90,13 @@ growi-plugin-codeblock-extended/
   6. `setupLineNumbers(pre, code)` — `data-no-linenum` がなく Prism 内側 div が存在すれば、行数算出・spec 解析・aside 生成・code-wrap 生成・hlOverlay 生成・scroll リスナー登録を行う
   7. `pre.setAttribute('data-gpcb-enhanced', '1')`
 
-- **`handleCopyClick(code, btn, pre)`**: `code.textContent ?? ''` を `navigator.clipboard.writeText` に渡す。成功時は `flashCopyState(btn, 'ok', pre)`、失敗時は `flashCopyState(btn, 'fail', pre)` を呼ぶ。
+- **`handleCopyClick(e, code, btn, pre)`**: `e.shiftKey && isDiffTarget(pre, code)` なら raw テキストを、それ以外で diff ブロックなら `extractNewCode(rawText)` を、通常ブロックなら `rawText` をそのまま `navigator.clipboard.writeText` に渡す。成功時は `flashCopyState(btn, isRaw ? 'ok-raw' : 'ok', pre)`、失敗時は `'fail'` を渡す。
+
+- **`extractNewCode(text)`**: diff テキストを行単位で処理し、hunk/removed 行を除外。added 行は先頭 `+` を除去、context 行は先頭スペースを除去して結合する。
 
 - **`flashCopyState(btn, state, pre)`**: `blockRefs` WeakMap から既存タイマーを取り出してクリアし、`setCopyBtnState` でアイコン・クラス・aria-label を更新。2 秒後に元の状態に戻す `setTimeout` id を `blockRefs.copyTimerId` に保持する。
 
-- **`setCopyBtnState(btn, state)`**: ボタンの子要素を全削除してから `COPY_BTN_STATE_MAP` のアイコン生成関数を呼び、結果を `appendChild`。`innerHTML` は使わない。
+- **`setCopyBtnState(btn, state)`**: ボタンの子要素を全削除してから `COPY_BTN_STATE_MAP` のアイコン生成関数を呼び、結果を `appendChild`。`aria-label` と `data-gpcb-tooltip` を同値で設定する（`title` 属性は使わない）。`state === 'copy'` かつ `data-gpcb-copy-diff` 属性あり（diff ブロック）の場合は tooltip テキストに Shift+Click ヒントを付加する。`innerHTML` は使わない。
 
 - **`setupLineNumbers(pre, code)`**: ① `code.textContent` から行数算出（末尾改行除外）② `findLinenumSpec` → `parseLinenumSpec` で `{start=N,hl=...}` を解析 ③ `<aside class="gpcb-linenums">` を行数分の `<span>` で生成（highlight 行は `.gpcb-linenum-hl` クラス）④ `<div class="gpcb-code-wrap">` で `<code>` を包む ⑤ highlight 行があれば `<div class="gpcb-hl-overlay">` を `codeWrap.prepend` ⑥ scroll イベントリスナーを codeWrap に登録し `refs.hlScrollHandler` に保持 ⑦ aside を Prism 内側 div に prepend
 
@@ -103,7 +106,7 @@ growi-plugin-codeblock-extended/
 
 - **`isDiffTarget(pre, code)`**: `isDiffBlock(code)`（`language-diff` クラス判定）または `hasDiffModifier(pre, code)`（`{diff}` 修飾子判定）のいずれかが true なら diff ブロックと見なす。`hasDiffModifier` は `findLinenumSpec` でスペック文字列を取得し、カンマ区切りで分割して `'diff'` と完全一致するパートがあるかを確認する。diff ブロックと判定された場合は `setupDiffView` のみを呼び `setupLineNumbers` は呼ばない。このため `{hl=...}` や `{start=...}` を同時に指定しても**黙って無視**される（仕様）。
 
-- **`setupDiffView(pre, code)`**: `setupLineNumbers` と同様の構造で、①行テキストを改行分割 ②各行を `classifyDiffLine`（`@@` → hunk、`+++`/`---` → context、`+` → added、`-` → removed、他 → context）で分類 ③`<aside class="gpcb-diff-gutter">` にガター記号 span を生成 ④`<div class="gpcb-hl-overlay gpcb-diff-overlay">` に行分の div を生成（added/removed/hunk に対応クラス付与）⑤`<code>` を `<div class="gpcb-code-wrap">` で包む ⑥scroll リスナー登録。`data-no-diff` 属性があれば早期 return。行番号は生成しない（diff ブロックは自動的に行番号無効）。
+- **`setupDiffView(pre, code)`**: `setupLineNumbers` と同様の構造で、①行テキストを改行分割 ②各行を `classifyDiffLine`（`@@` → hunk、`+++`/`---` → hunk、`+` → added、`-` → removed、他 → context）で分類 ③`data-no-linenum` がなければ `<aside class="gpcb-linenums">` を生成（added/context 行のみ番号を振る、removed/hunk はカウントしない）④`<aside class="gpcb-diff-gutter">` にガター記号 span を生成 ⑤`<div class="gpcb-hl-overlay">` に行分の div を生成（added/removed/hunk に対応クラス付与）⑥`<code>` を `<div class="gpcb-code-wrap">` で包む ⑦scroll リスナー登録。`data-no-diff` 属性があれば早期 return。`{start=N}` で行番号の開始番号を指定可能。
 
 - **`cleanupBlock(pre)`**: `blockRefs.get(pre)` から `copyTimerId`（`clearTimeout`）・`copyHandler`（`removeEventListener`）・`hlScrollHandler`（`codeWrap.removeEventListener`）を解除。`codeWrap` の子を全て親に移してから `codeWrap.remove()`（hlOverlay も連れて消える）。`lineNums`・`filenameLabel`・`toolbar` を `.remove()`。`gpcb-enhanced` クラスと `data-gpcb-enhanced` 属性を削除。`<code>` の中身は一切変更しない。`<cite class="code-highlighted-title">` は DOM から削除しない（CSS スコープが外れると自動復帰する）。
 
@@ -128,6 +131,8 @@ growi-plugin-codeblock-extended/
 | opt-out（行番号） | `data-no-linenum` |
 | opt-out（差分表示） | `data-no-diff` |
 | ファイル名ラベル属性 | `data-gpcb-filename` |
+| コピーボタン diff マーカー属性 | `data-gpcb-copy-diff` |
+| コピーボタン tooltip 属性 | `data-gpcb-tooltip` |
 | 行番号 aside クラス | `gpcb-linenums` |
 | 行番号ハイライトクラス | `gpcb-linenum-hl` |
 | コードスクロールコンテナクラス | `gpcb-code-wrap` |
@@ -136,6 +141,7 @@ growi-plugin-codeblock-extended/
 | diff ガタークラス | `gpcb-diff-gutter` |
 | diff ガター記号クラス | `gpcb-diff-add` / `gpcb-diff-rm` / `gpcb-diff-hh` |
 | diff オーバーレイ行クラス | `gpcb-diff-line-add` / `gpcb-diff-line-rm` / `gpcb-diff-line-hh` |
+| コピー ok-raw クラス | `gpcb-copy-ok-raw` |
 | pluginActivators キー | `growi-plugin-codeblock-extended` |
 
 ## ハマりどころ（必読）
@@ -330,15 +336,21 @@ GROWI 管理画面 `/admin/plugins` で **削除 → 再インストール**。
 40. コピーボタンでコピーした内容に行番号・ハイライトオーバーレイの文字が含まれない
 41. ` ```diff ` ブロックで追加行（`+`）が緑背景・削除行（`-`）が赤背景・ハンク行（`@@`）が紫背景で表示される
 42. ` ```diff ` ブロックの左ガターに `+` / `−` / `@` 記号が表示される
-43. `+++` / `---` で始まるファイルヘッダー行は context 扱い（色なし）
+43. `+++` / `---` で始まるファイルヘッダー行は hunk 扱い（紫背景・行番号なし）
 44. ` ```python:{diff} ` でシンタックスハイライト（Python 色）と diff 背景色・ガターが共存する
 45. ` ```python:src/app.py{diff} ` でファイル名ラベル・シンタックスハイライト・diff 表示が共存する
 46. `python:{diff}` のとき `{diff}` がファイル名ラベルに表示されない
 47. ` ```python{diff} ` （コロンなし）は diff 表示にならず通常の Python コードブロックとして扱われる（ハマりどころ #16 参照）
 48. `<pre data-no-diff>` で diff ガター・背景色が非表示になる（コピーボタン・ファイル名ラベルは出る）
-49. diff ブロックで行番号が表示されない
+49. diff ブロックで行番号が表示される（追加行・コンテキスト行のみ番号を振る。削除行・ハンク行には番号がつかない）
 50. diff ブロックの横スクロール時に背景色オーバーレイが追従する
-51. `unmount` 後に `<aside class="gpcb-diff-gutter">` / `.gpcb-diff-overlay` が DOM から消える
+51. `unmount` 後に `<aside class="gpcb-diff-gutter">` / `<aside class="gpcb-linenums">` / `.gpcb-code-wrap` が DOM から消える
+52. diff ブロックで通常クリックすると新コードのみがコピーされる（`+`/空白の先頭記号が除去され、削除行・ハンク行は含まれない）
+53. diff ブロックで Shift+クリックすると raw diff テキスト（`+`/`-`/`@@` を含む元テキスト）がコピーされる
+54. diff raw コピー後は青 ± バッジが 2 秒間表示され、通常コピーの緑 ✓ と視覚的に区別できる
+55. コピーボタンにホバーすると 0.2s 後に tooltip が表示される（ブラウザ標準より速い）
+56. diff ブロックの tooltip に "Shift+Click: Copy RAW Diff" のヒントが含まれる
+57. コピー後（フィードバック中）もホバーを維持すれば tooltip が表示され続け、マウスを外すと 1.5s かけてゆっくり消える
 
 ## 会話ガイドライン
 
