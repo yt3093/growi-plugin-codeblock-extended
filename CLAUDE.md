@@ -101,7 +101,7 @@ growi-plugin-codeblock-extended/
 
 - **`parseLinenumSpec(inner)`**: ルックアヘッド正規表現 `/(\w+)\s*=\s*([^=]*?)(?=,\s*\w+\s*=|$)/g` で key=value を抽出。`hl` の値内カンマ（例: `hl=3,5-7` の `,5-7`）を誤分割しないよう「次の key= が来るまで」を lookahead で吸収する。
 
-- **`isDiffTarget(pre, code)`**: `isDiffBlock(code)`（`language-diff` クラス判定）または `hasDiffModifier(pre, code)`（`{diff}` 修飾子判定）のいずれかが true なら diff ブロックと見なす。`hasDiffModifier` は `findLinenumSpec` でスペック文字列を取得し、カンマ区切りで分割して `'diff'` と完全一致するパートがあるかを確認する。
+- **`isDiffTarget(pre, code)`**: `isDiffBlock(code)`（`language-diff` クラス判定）または `hasDiffModifier(pre, code)`（`{diff}` 修飾子判定）のいずれかが true なら diff ブロックと見なす。`hasDiffModifier` は `findLinenumSpec` でスペック文字列を取得し、カンマ区切りで分割して `'diff'` と完全一致するパートがあるかを確認する。diff ブロックと判定された場合は `setupDiffView` のみを呼び `setupLineNumbers` は呼ばない。このため `{hl=...}` や `{start=...}` を同時に指定しても**黙って無視**される（仕様）。
 
 - **`setupDiffView(pre, code)`**: `setupLineNumbers` と同様の構造で、①行テキストを改行分割 ②各行を `classifyDiffLine`（`@@` → hunk、`+++`/`---` → context、`+` → added、`-` → removed、他 → context）で分類 ③`<aside class="gpcb-diff-gutter">` にガター記号 span を生成 ④`<div class="gpcb-hl-overlay gpcb-diff-overlay">` に行分の div を生成（added/removed/hunk に対応クラス付与）⑤`<code>` を `<div class="gpcb-code-wrap">` で包む ⑥scroll リスナー登録。`data-no-diff` 属性があれば早期 return。行番号は生成しない（diff ブロックは自動的に行番号無効）。
 
