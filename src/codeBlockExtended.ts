@@ -251,6 +251,17 @@ function isDiffBlock(code: HTMLElement): boolean {
   return code.classList.contains('language-diff');
 }
 
+// {diff} 修飾子（例: ```python{diff}）を検出する
+function hasDiffModifier(pre: HTMLPreElement, code: HTMLElement): boolean {
+  const spec = findLinenumSpec(pre, code);
+  if (!spec) return false;
+  return spec.split(',').some(part => part.trim().toLowerCase() === 'diff');
+}
+
+function isDiffTarget(pre: HTMLPreElement, code: HTMLElement): boolean {
+  return isDiffBlock(code) || hasDiffModifier(pre, code);
+}
+
 function classifyDiffLine(line: string): DiffLineType {
   if (line.startsWith('@@')) return 'hunk';
   // +++ / --- はファイルヘッダー行なので context 扱い
@@ -463,7 +474,7 @@ function enhanceCodeBlock(pre: HTMLPreElement): void {
   pre.classList.add('gpcb-enhanced');
   pre.prepend(toolbar);
   setupFilenameLabel(pre);
-  if (isDiffBlock(code)) {
+  if (isDiffTarget(pre, code)) {
     setupDiffView(pre, code);
   } else {
     setupLineNumbers(pre, code);
@@ -592,7 +603,7 @@ export function createCodeBlockExtended(): { mount(): void; unmount(): void } {
                 refs.hlScrollHandler = null;
                 const code = parentPre.querySelector<HTMLElement>('code');
                 if (code) {
-                  if (isDiffBlock(code)) setupDiffView(parentPre, code);
+                  if (isDiffTarget(parentPre, code)) setupDiffView(parentPre, code);
                   else setupLineNumbers(parentPre, code);
                 }
               }
