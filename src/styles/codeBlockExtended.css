@@ -6,6 +6,7 @@
   --gpcb-btn-color-hover:  rgba(255, 255, 255, 0.9);
   --gpcb-btn-bg-hover:     rgba(255, 255, 255, 0.18);
   --gpcb-copy-ok-color:    #4ade80;
+  --gpcb-copy-ok-raw-color: #60a5fa;
   --gpcb-copy-fail-color:  #f87171;
   --gpcb-badge-fill:       rgba(20, 22, 28, 0.85);
 }
@@ -46,6 +47,7 @@ pre.gpcb-enhanced:has(> .gpcb-filename) .gpcb-toolbar {
 
 /* copy button */
 [data-gpcb-copy-btn] {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -59,6 +61,40 @@ pre.gpcb-enhanced:has(> .gpcb-filename) .gpcb-toolbar {
   cursor: pointer;
   flex-shrink: 0;
   transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+/* カスタム tooltip: ブラウザデフォルトより短い遅延で表示 */
+[data-gpcb-copy-btn]::after {
+  content: attr(data-gpcb-tooltip);
+  position: absolute;
+  top: calc(100% + 5px);
+  right: 0;
+  white-space: nowrap;
+  font-family: var(--bs-font-monospace, ui-monospace, SFMono-Regular, monospace);
+  font-size: 0.68rem;
+  line-height: 1;
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: rgba(82, 92, 108, 0.95);
+  color: rgba(255, 255, 255, 0.92);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 1.5s ease; /* マウスが外れたらゆっくり消える */
+  z-index: 10;
+}
+
+/* 通常ホバー時: 速く表示 */
+[data-gpcb-copy-btn]:not(.gpcb-copy-ok):not(.gpcb-copy-ok-raw):not(.gpcb-copy-fail):hover::after {
+  opacity: 1;
+  transition: opacity 0.1s ease 0.2s; /* 200ms 遅延後に素早く表示 */
+}
+
+/* フィードバック中もホバー中は tooltip を維持（"Copied!" などのテキストを表示し続ける） */
+[data-gpcb-copy-btn].gpcb-copy-ok:hover::after,
+[data-gpcb-copy-btn].gpcb-copy-ok-raw:hover::after,
+[data-gpcb-copy-btn].gpcb-copy-fail:hover::after {
+  opacity: 1;
+  transition: opacity 1.5s ease; /* マウスが外れたらゆっくり消える */
 }
 
 [data-gpcb-copy-btn]:hover {
@@ -76,12 +112,17 @@ pre.gpcb-enhanced:has(> .gpcb-filename) .gpcb-toolbar {
   color: var(--gpcb-copy-ok-color);
 }
 
+[data-gpcb-copy-btn].gpcb-copy-ok-raw {
+  color: var(--gpcb-copy-ok-raw-color);
+}
+
 [data-gpcb-copy-btn].gpcb-copy-fail {
   color: var(--gpcb-copy-fail-color);
 }
 
 /* コピー成功・失敗中はマウスが外れても toolbar を維持 */
 pre.gpcb-enhanced:has([data-gpcb-copy-btn].gpcb-copy-ok) .gpcb-toolbar,
+pre.gpcb-enhanced:has([data-gpcb-copy-btn].gpcb-copy-ok-raw) .gpcb-toolbar,
 pre.gpcb-enhanced:has([data-gpcb-copy-btn].gpcb-copy-fail) .gpcb-toolbar {
   opacity: 1;
   pointer-events: auto;
@@ -120,7 +161,8 @@ pre.gpcb-enhanced .code-highlighted-title {
 /* prefers-reduced-motion: トランジション無効 */
 @media (prefers-reduced-motion: reduce) {
   .gpcb-toolbar,
-  [data-gpcb-copy-btn] {
+  [data-gpcb-copy-btn],
+  [data-gpcb-copy-btn]::after {
     transition: none;
   }
 }
@@ -209,12 +251,84 @@ pre.gpcb-enhanced > div > code {
   color: rgba(255, 235, 100, 0.9);
 }
 
-/* Print: toolbar / filename label / linenums / hl-overlay を非表示 */
+/* Print: toolbar / filename label / linenums / diff-gutter / hl-overlay を非表示 */
 @media print {
   .gpcb-toolbar,
   .gpcb-filename,
   .gpcb-linenums,
+  .gpcb-diff-gutter,
   .gpcb-hl-overlay {
     display: none;
   }
+}
+
+/* ================================================================
+   diff 表示
+   Prism / Shiki が language-diff ブロックに付けるトークン色（文字色・
+   背景色）を無効化し、gpcb-diff-overlay の背景色のみで差分を表現する。
+   !important でインラインスタイル（Shiki）も上書きする。
+   ================================================================ */
+/* Prism/Shiki が diff トークンに付ける背景色のみリセットし、文字色（シンタックスハイライト）は残す。
+   背景色は gpcb-diff-overlay に一元化することで、ガター幅まで含めた全行背景を統一する。 */
+pre.gpcb-enhanced code.language-diff .token {
+  background: none !important;
+}
+
+/* diff ガター: gpcb-linenums と同構造で +/−/@ 記号を表示 */
+.gpcb-diff-gutter {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  font-family: var(--bs-font-monospace, ui-monospace, SFMono-Regular, monospace);
+  font-feature-settings: 'tnum';
+  text-align: center;
+  user-select: none;
+  pointer-events: none;
+}
+
+.gpcb-diff-gutter > span {
+  display: block;
+  padding: 0 0.6em;
+}
+
+.gpcb-diff-gutter > span.gpcb-diff-add {
+  color: var(--gpcb-diff-add-gutter-color, #3fb950);
+  background: var(--gpcb-diff-add-bg, rgba(46, 160, 67, 0.18));
+}
+
+.gpcb-diff-gutter > span.gpcb-diff-rm {
+  color: var(--gpcb-diff-rm-gutter-color, #f85149);
+  background: var(--gpcb-diff-rm-bg, rgba(248, 81, 73, 0.18));
+}
+
+.gpcb-diff-gutter > span.gpcb-diff-hh {
+  color: var(--gpcb-diff-hh-gutter-color, #a371f7);
+  background: var(--gpcb-diff-hunk-bg, rgba(163, 113, 247, 0.10));
+}
+
+/* diff オーバーレイの背景色 */
+.gpcb-hl-line.gpcb-diff-line-add {
+  background: var(--gpcb-diff-add-bg, rgba(46, 160, 67, 0.18));
+}
+
+.gpcb-hl-line.gpcb-diff-line-rm {
+  background: var(--gpcb-diff-rm-bg, rgba(248, 81, 73, 0.18));
+}
+
+.gpcb-hl-line.gpcb-diff-line-hh {
+  background: var(--gpcb-diff-hunk-bg, rgba(163, 113, 247, 0.10));
+}
+
+/* diff ブロックの行番号列: 行の種別に対応した背景色を付与し、
+   コードエリアのオーバーレイと視覚的に揃える */
+.gpcb-linenums > span.gpcb-diff-linenum-add {
+  background: var(--gpcb-diff-add-bg, rgba(46, 160, 67, 0.18));
+}
+
+.gpcb-linenums > span.gpcb-diff-linenum-rm {
+  background: var(--gpcb-diff-rm-bg, rgba(248, 81, 73, 0.18));
+}
+
+.gpcb-linenums > span.gpcb-diff-linenum-hh {
+  background: var(--gpcb-diff-hunk-bg, rgba(163, 113, 247, 0.10));
 }

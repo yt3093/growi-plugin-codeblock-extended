@@ -3,7 +3,9 @@ import './styles/codeBlockExtended.css';
 const ENHANCED_ATTR = 'data-gpcb-enhanced';
 const NO_COPY_ATTR = 'data-no-copy';
 const COPY_BTN_ATTR = 'data-gpcb-copy-btn';
+const COPY_BTN_DIFF_ATTR = 'data-gpcb-copy-diff';
 const COPY_CLASS_OK = 'gpcb-copy-ok';
+const COPY_CLASS_OK_RAW = 'gpcb-copy-ok-raw';
 const COPY_CLASS_FAIL = 'gpcb-copy-fail';
 const COPY_FEEDBACK_MS = 2000;
 const SVG_NS = 'http://www.w3.org/2000/svg';
@@ -22,6 +24,18 @@ const HL_LINE_CLASS = 'gpcb-hl-line';
 const HL_LINE_HL_CLASS = 'gpcb-hl-line-hl';
 const SPEC_RE = /\{([^}]+)\}/;
 
+const NO_DIFF_ATTR = 'data-no-diff';
+const DIFF_GUTTER_CLASS = 'gpcb-diff-gutter';
+const DIFF_GUTTER_ADD_CLASS = 'gpcb-diff-add';
+const DIFF_GUTTER_RM_CLASS = 'gpcb-diff-rm';
+const DIFF_GUTTER_HH_CLASS = 'gpcb-diff-hh';
+const DIFF_LINE_ADD_CLASS = 'gpcb-diff-line-add';
+const DIFF_LINE_RM_CLASS = 'gpcb-diff-line-rm';
+const DIFF_LINE_HH_CLASS = 'gpcb-diff-line-hh';
+const DIFF_LINENUM_ADD_CLASS = 'gpcb-diff-linenum-add';
+const DIFF_LINENUM_RM_CLASS = 'gpcb-diff-linenum-rm';
+const DIFF_LINENUM_HH_CLASS = 'gpcb-diff-linenum-hh';
+
 // GROWI のナビバー要素を検索するセレクタ候補（上から順に試す）
 const NAVBAR_SELECTORS = [
   '#grw-contextual-sub-nav',
@@ -32,7 +46,8 @@ const NAVBAR_SELECTORS = [
   'nav.navbar.sticky-top',
 ];
 
-type CopyBtnState = 'copy' | 'ok' | 'fail';
+type CopyBtnState = 'copy' | 'ok' | 'ok-raw' | 'fail';
+type DiffLineType = 'added' | 'removed' | 'hunk' | 'context';
 
 interface LinenumConfig {
   start: number;
@@ -43,6 +58,7 @@ interface BlockRefs {
   toolbar: HTMLDivElement;
   filenameLabel: HTMLSpanElement | null;
   lineNums: HTMLElement | null;
+  diffGutter: HTMLElement | null;
   codeWrap: HTMLDivElement | null;
   hlOverlay: HTMLDivElement | null;
   hlScrollHandler: (() => void) | null;
@@ -127,6 +143,30 @@ function makeCopyOkIcon(): SVGSVGElement {
   return svg;
 }
 
+function appendPlusMinusBadge(svg: SVGSVGElement): void {
+  svg.appendChild(createSvgEl('circle', {
+    cx: '18', cy: '18', r: '5.5',
+    stroke: 'currentColor', 'stroke-width': '1.5',
+    class: 'gpcb-copy-badge-bg',
+  }));
+  // ± 記号: 上部に + (水平 + 垂直)、下部に − (水平)
+  svg.appendChild(createSvgEl('path', {
+    d: 'M16 16 H20 M18 13.5 V18.5 M16 20.5 H20',
+    stroke: 'currentColor', 'stroke-width': '1.8',
+    'stroke-linecap': 'round',
+    fill: 'none',
+  }));
+}
+
+function makeCopyOkRawIcon(): SVGSVGElement {
+  const svg = buildSvg([
+    { tag: 'rect', attrs: { width: '14', height: '14', x: '8', y: '8', rx: '2', ry: '2' } },
+    { tag: 'path', attrs: { d: 'M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2' } },
+  ]);
+  appendPlusMinusBadge(svg);
+  return svg;
+}
+
 function makeFailIcon(): SVGSVGElement {
   return buildSvg([
     { tag: 'path', attrs: { d: 'M18 6 6 18' } },
@@ -137,32 +177,42 @@ function makeFailIcon(): SVGSVGElement {
 const COPY_BTN_STATE_MAP: Record<CopyBtnState, { icon: () => SVGSVGElement; label: string; className: string | null }> = {
   'copy': {
     icon: makeCopyIcon,
-    label: 'コードをクリップボードにコピー',
+    label: 'Copy to Clipboard',
     className: null,
   },
   'ok': {
     icon: makeCopyOkIcon,
-    label: 'クリップボードにコピーしました',
+    label: 'Copied!',
     className: COPY_CLASS_OK,
+  },
+  'ok-raw': {
+    icon: makeCopyOkRawIcon,
+    label: 'Copied RAW Diff!',
+    className: COPY_CLASS_OK_RAW,
   },
   'fail': {
     icon: makeFailIcon,
-    label: 'クリップボードへのコピーに失敗しました',
+    label: 'Failed to Copy',
     className: COPY_CLASS_FAIL,
   },
 };
 
 function setCopyBtnState(btn: HTMLButtonElement, state: CopyBtnState): void {
   while (btn.firstChild) btn.removeChild(btn.firstChild);
-  btn.classList.remove(COPY_CLASS_OK, COPY_CLASS_FAIL);
+  btn.classList.remove(COPY_CLASS_OK, COPY_CLASS_OK_RAW, COPY_CLASS_FAIL);
   const cfg = COPY_BTN_STATE_MAP[state];
   if (cfg.className) btn.classList.add(cfg.className);
   btn.setAttribute('aria-label', cfg.label);
-  btn.title = cfg.label;
+  btn.setAttribute('data-gpcb-tooltip', cfg.label);
+  if (state === 'copy' && btn.hasAttribute(COPY_BTN_DIFF_ATTR)) {
+    const diffLabel = 'Copy to Clipboard (Shift+Click: Copy RAW Diff)';
+    btn.setAttribute('aria-label', diffLabel);
+    btn.setAttribute('data-gpcb-tooltip', diffLabel);
+  }
   btn.appendChild(cfg.icon());
 }
 
-function flashCopyState(btn: HTMLButtonElement, state: 'ok' | 'fail', pre: HTMLPreElement): void {
+function flashCopyState(btn: HTMLButtonElement, state: 'ok' | 'ok-raw' | 'fail', pre: HTMLPreElement): void {
   const refs = blockRefs.get(pre);
   if (refs?.copyTimerId !== undefined) window.clearTimeout(refs.copyTimerId);
   setCopyBtnState(btn, state);
@@ -173,10 +223,12 @@ function flashCopyState(btn: HTMLButtonElement, state: 'ok' | 'fail', pre: HTMLP
   if (refs) refs.copyTimerId = id;
 }
 
-function handleCopyClick(code: HTMLElement, btn: HTMLButtonElement, pre: HTMLPreElement): void {
-  const text = code.textContent ?? '';
+function handleCopyClick(e: MouseEvent, code: HTMLElement, btn: HTMLButtonElement, pre: HTMLPreElement): void {
+  const rawText = code.textContent ?? '';
+  const isRaw = e.shiftKey && isDiffTarget(pre, code);
+  const text = isRaw ? rawText : (isDiffTarget(pre, code) ? extractNewCode(rawText) : rawText);
   navigator.clipboard.writeText(text).then(
-    () => flashCopyState(btn, 'ok', pre),
+    () => flashCopyState(btn, isRaw ? 'ok-raw' : 'ok', pre),
     (err) => {
       console.warn('[gpcb] clipboard write failed:', err);
       flashCopyState(btn, 'fail', pre);
@@ -232,6 +284,146 @@ function findLinenumSpec(pre: HTMLPreElement, code: HTMLElement): string | null 
     if (match) return match[1];
   }
   return null;
+}
+
+// --- diff helpers ---
+
+function isDiffBlock(code: HTMLElement): boolean {
+  return code.classList.contains('language-diff');
+}
+
+// {diff} 修飾子（例: ```python{diff}）を検出する
+function hasDiffModifier(pre: HTMLPreElement, code: HTMLElement): boolean {
+  const spec = findLinenumSpec(pre, code);
+  if (!spec) return false;
+  return spec.split(',').some(part => part.trim().toLowerCase() === 'diff');
+}
+
+function isDiffTarget(pre: HTMLPreElement, code: HTMLElement): boolean {
+  return isDiffBlock(code) || hasDiffModifier(pre, code);
+}
+
+function classifyDiffLine(line: string): DiffLineType {
+  if (line.startsWith('@@')) return 'hunk';
+  // +++ / --- はファイルヘッダー行。コード行ではないため hunk と同様に扱い行番号を振らない
+  if (line.startsWith('+++') || line.startsWith('---')) return 'hunk';
+  if (line.startsWith('+')) return 'added';
+  if (line.startsWith('-')) return 'removed';
+  return 'context';
+}
+
+function extractNewCode(text: string): string {
+  const stripped = text.endsWith('\n') ? text.slice(0, -1) : text;
+  return stripped
+    .split('\n')
+    .flatMap(line => {
+      const type = classifyDiffLine(line);
+      if (type === 'hunk' || type === 'removed') return [];
+      if (type === 'added') return [line.slice(1)];
+      return [line.startsWith(' ') ? line.slice(1) : line];
+    })
+    .join('\n');
+}
+
+function setupDiffView(pre: HTMLPreElement, code: HTMLElement): void {
+  if (pre.hasAttribute(NO_DIFF_ATTR)) return;
+
+  const inner = Array.from(pre.children).find(
+    (el): el is HTMLDivElement =>
+      el.tagName === 'DIV' && !el.classList.contains('gpcb-toolbar'),
+  );
+  if (!inner) return;
+  if (!inner.contains(code)) return;
+
+  const text = code.textContent ?? '';
+  const stripped = text.endsWith('\n') ? text.slice(0, -1) : text;
+  if (stripped === '') return;
+  const lines = stripped.split('\n');
+
+  // {start=N} を解析して新ファイル側の開始行番号を決定
+  const showLineNums = !pre.hasAttribute(NO_LINENUM_ATTR);
+  let afterLineNum = 1;
+  if (showLineNums) {
+    const specStr = findLinenumSpec(pre, code);
+    if (specStr) afterLineNum = parseLinenumSpec(specStr).start;
+  }
+
+  const linenumsAside = showLineNums ? document.createElement('aside') : null;
+  if (linenumsAside) {
+    linenumsAside.className = LINENUMS_CLASS;
+    linenumsAside.setAttribute('aria-hidden', 'true');
+  }
+
+  const diffGutter = document.createElement('aside');
+  diffGutter.className = DIFF_GUTTER_CLASS;
+  diffGutter.setAttribute('aria-hidden', 'true');
+
+  const hlOverlay = document.createElement('div');
+  hlOverlay.className = `${HL_OVERLAY_CLASS} gpcb-diff-overlay`;
+  hlOverlay.setAttribute('aria-hidden', 'true');
+
+  for (const line of lines) {
+    const type = classifyDiffLine(line);
+
+    // 行番号列: context / added のみカウントアップ、removed / hunk は空白
+    if (linenumsAside) {
+      const numSpan = document.createElement('span');
+      numSpan.textContent = (type === 'context' || type === 'added') ? String(afterLineNum) : ' ';
+      if (type === 'added') numSpan.classList.add(DIFF_LINENUM_ADD_CLASS);
+      else if (type === 'removed') numSpan.classList.add(DIFF_LINENUM_RM_CLASS);
+      else if (type === 'hunk') numSpan.classList.add(DIFF_LINENUM_HH_CLASS);
+      linenumsAside.appendChild(numSpan);
+    }
+    if (type === 'context' || type === 'added') afterLineNum++;
+
+    // diff ガター列
+    const span = document.createElement('span');
+    if (type === 'added') {
+      span.textContent = '+';
+      span.classList.add(DIFF_GUTTER_ADD_CLASS);
+    } else if (type === 'removed') {
+      span.textContent = '\u2212'; // minus sign
+      span.classList.add(DIFF_GUTTER_RM_CLASS);
+    } else if (type === 'hunk') {
+      span.textContent = '@';
+      span.classList.add(DIFF_GUTTER_HH_CLASS);
+    } else {
+      span.textContent = ' ';
+    }
+    diffGutter.appendChild(span);
+
+    // 背景オーバーレイ行
+    const row = document.createElement('div');
+    row.className = HL_LINE_CLASS;
+    if (type === 'added') row.classList.add(DIFF_LINE_ADD_CLASS);
+    else if (type === 'removed') row.classList.add(DIFF_LINE_RM_CLASS);
+    else if (type === 'hunk') row.classList.add(DIFF_LINE_HH_CLASS);
+    hlOverlay.appendChild(row);
+  }
+
+  const codeWrap = document.createElement('div');
+  codeWrap.className = CODE_WRAP_CLASS;
+  code.parentNode!.insertBefore(codeWrap, code);
+  codeWrap.appendChild(code);
+  codeWrap.prepend(hlOverlay);
+
+  // DOM 順: [linenum] [diff-gutter] [code-wrap]
+  // prepend は先頭挿入なので逆順で呼ぶ
+  inner.prepend(diffGutter);
+  if (linenumsAside) inner.prepend(linenumsAside);
+
+  const refs = blockRefs.get(pre);
+  if (refs) {
+    refs.lineNums = linenumsAside;
+    refs.diffGutter = diffGutter;
+    refs.codeWrap = codeWrap;
+    refs.hlOverlay = hlOverlay;
+    const onScroll = () => {
+      hlOverlay.style.transform = `translateX(${codeWrap.scrollLeft}px)`;
+    };
+    codeWrap.addEventListener('scroll', onScroll, { passive: true });
+    refs.hlScrollHandler = onScroll;
+  }
 }
 
 // --- setup / enhance / cleanup ---
@@ -330,11 +522,12 @@ function setupCopyButton(toolbar: HTMLDivElement, code: HTMLElement, pre: HTMLPr
   const btn = document.createElement('button');
   btn.type = 'button';
   btn.setAttribute(COPY_BTN_ATTR, '1');
+  if (isDiffTarget(pre, code)) btn.setAttribute(COPY_BTN_DIFF_ATTR, '1');
   setCopyBtnState(btn, 'copy');
 
   const copyHandler = (e: MouseEvent) => {
     e.preventDefault();
-    handleCopyClick(code, btn, pre);
+    handleCopyClick(e, code, btn, pre);
   };
   btn.addEventListener('click', copyHandler);
   toolbar.appendChild(btn);
@@ -360,14 +553,18 @@ function enhanceCodeBlock(pre: HTMLPreElement): void {
   const toolbar = document.createElement('div');
   toolbar.className = 'gpcb-toolbar';
 
-  blockRefs.set(pre, { toolbar, filenameLabel: null, lineNums: null, codeWrap: null, hlOverlay: null, hlScrollHandler: null, copyBtn: null, copyHandler: null });
+  blockRefs.set(pre, { toolbar, filenameLabel: null, lineNums: null, diffGutter: null, codeWrap: null, hlOverlay: null, hlScrollHandler: null, copyBtn: null, copyHandler: null });
 
   setupCopyButton(toolbar, code, pre);
 
   pre.classList.add('gpcb-enhanced');
   pre.prepend(toolbar);
   setupFilenameLabel(pre);
-  setupLineNumbers(pre, code);
+  if (isDiffTarget(pre, code)) {
+    setupDiffView(pre, code);
+  } else {
+    setupLineNumbers(pre, code);
+  }
   pre.setAttribute(ENHANCED_ATTR, '1');
 }
 
@@ -388,6 +585,7 @@ function cleanupBlock(pre: HTMLPreElement): void {
       refs.codeWrap.remove();
     }
     refs.lineNums?.remove();
+    refs.diffGutter?.remove();
     refs.filenameLabel?.remove();
     refs.toolbar.remove();
     blockRefs.delete(pre);
@@ -446,11 +644,12 @@ export function createCodeBlockExtended(): { mount(): void; unmount(): void } {
           for (const node of Array.from(m.addedNodes)) {
             if (node.nodeType !== Node.ELEMENT_NODE) continue;
             const el = node as Element;
-            // プラグイン自身が追加した toolbar / filename label / linenums は無視して無限ループを防ぐ
+            // プラグイン自身が追加した toolbar / filename label / linenums / diff-gutter は無視して無限ループを防ぐ
             if (
               el.classList?.contains('gpcb-toolbar') ||
               el.classList?.contains(FILENAME_CLASS) ||
               el.classList?.contains(LINENUMS_CLASS) ||
+              el.classList?.contains(DIFF_GUTTER_CLASS) ||
               el.classList?.contains(CODE_WRAP_CLASS) ||
               el.classList?.contains(HL_OVERLAY_CLASS)
             ) continue;
@@ -477,17 +676,22 @@ export function createCodeBlockExtended(): { mount(): void; unmount(): void } {
             ) {
               const parentPre = m.target as HTMLPreElement;
               const refs = blockRefs.get(parentPre);
-              // isConnected で旧 aside が DOM から切り離されていないか確認する
-              if (refs && (!refs.lineNums || !refs.lineNums.isConnected)) {
+              // lineNums（通常）または diffGutter（diff）のどちらかが切り離されていれば再セットアップ
+              const activeGutter = refs?.lineNums ?? refs?.diffGutter;
+              if (refs && (!activeGutter || !activeGutter.isConnected)) {
                 if (refs.hlScrollHandler && refs.codeWrap) {
                   refs.codeWrap.removeEventListener('scroll', refs.hlScrollHandler);
                 }
                 refs.lineNums = null;
+                refs.diffGutter = null;
                 refs.codeWrap = null;
                 refs.hlOverlay = null;
                 refs.hlScrollHandler = null;
                 const code = parentPre.querySelector<HTMLElement>('code');
-                if (code) setupLineNumbers(parentPre, code);
+                if (code) {
+                  if (isDiffTarget(parentPre, code)) setupDiffView(parentPre, code);
+                  else setupLineNumbers(parentPre, code);
+                }
               }
               continue;
             }
