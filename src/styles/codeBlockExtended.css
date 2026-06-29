@@ -79,14 +79,22 @@ pre.gpcb-enhanced:has(> .gpcb-filename) .gpcb-toolbar {
   color: rgba(255, 255, 255, 0.92);
   pointer-events: none;
   opacity: 0;
-  transition: opacity 0.4s ease; /* ゆっくり消える */
+  transition: opacity 1.5s ease; /* マウスが外れたらゆっくり消える */
   z-index: 10;
 }
 
-/* ok/ok-raw/fail フィードバック中は tooltip を非表示。hover 中は速く表示 */
+/* 通常ホバー時: 速く表示 */
 [data-gpcb-copy-btn]:not(.gpcb-copy-ok):not(.gpcb-copy-ok-raw):not(.gpcb-copy-fail):hover::after {
   opacity: 1;
   transition: opacity 0.1s ease 0.2s; /* 200ms 遅延後に素早く表示 */
+}
+
+/* フィードバック中もホバー中は tooltip を維持（"Copied!" などのテキストを表示し続ける） */
+[data-gpcb-copy-btn].gpcb-copy-ok:hover::after,
+[data-gpcb-copy-btn].gpcb-copy-ok-raw:hover::after,
+[data-gpcb-copy-btn].gpcb-copy-fail:hover::after {
+  opacity: 1;
+  transition: opacity 1.5s ease; /* マウスが外れたらゆっくり消える */
 }
 
 [data-gpcb-copy-btn]:hover {
