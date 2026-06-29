@@ -267,8 +267,8 @@ function isDiffTarget(pre: HTMLPreElement, code: HTMLElement): boolean {
 
 function classifyDiffLine(line: string): DiffLineType {
   if (line.startsWith('@@')) return 'hunk';
-  // +++ / --- はファイルヘッダー行なので context 扱い
-  if (line.startsWith('+++') || line.startsWith('---')) return 'context';
+  // +++ / --- はファイルヘッダー行。コード行ではないため hunk と同様に扱い行番号を振らない
+  if (line.startsWith('+++') || line.startsWith('---')) return 'hunk';
   if (line.startsWith('+')) return 'added';
   if (line.startsWith('-')) return 'removed';
   return 'context';
