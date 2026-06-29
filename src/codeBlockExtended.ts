@@ -177,22 +177,22 @@ function makeFailIcon(): SVGSVGElement {
 const COPY_BTN_STATE_MAP: Record<CopyBtnState, { icon: () => SVGSVGElement; label: string; className: string | null }> = {
   'copy': {
     icon: makeCopyIcon,
-    label: 'コードをクリップボードにコピー',
+    label: 'Copy to Clipboard',
     className: null,
   },
   'ok': {
     icon: makeCopyOkIcon,
-    label: 'クリップボードにコピーしました',
+    label: 'Copied!',
     className: COPY_CLASS_OK,
   },
   'ok-raw': {
     icon: makeCopyOkRawIcon,
-    label: 'diff 全体をクリップボードにコピーしました',
+    label: 'Copied RAW Diff!',
     className: COPY_CLASS_OK_RAW,
   },
   'fail': {
     icon: makeFailIcon,
-    label: 'クリップボードへのコピーに失敗しました',
+    label: 'Failed to Copy',
     className: COPY_CLASS_FAIL,
   },
 };
@@ -205,7 +205,7 @@ function setCopyBtnState(btn: HTMLButtonElement, state: CopyBtnState): void {
   btn.setAttribute('aria-label', cfg.label);
   btn.setAttribute('data-gpcb-tooltip', cfg.label);
   if (state === 'copy' && btn.hasAttribute(COPY_BTN_DIFF_ATTR)) {
-    const diffLabel = 'コードをコピー (Shift+クリック: diff 全体をコピー)';
+    const diffLabel = 'Copy to Clipboard (Shift+Click: Copy RAW Diff)';
     btn.setAttribute('aria-label', diffLabel);
     btn.setAttribute('data-gpcb-tooltip', diffLabel);
   }

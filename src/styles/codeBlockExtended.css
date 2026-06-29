@@ -75,17 +75,18 @@ pre.gpcb-enhanced:has(> .gpcb-filename) .gpcb-toolbar {
   line-height: 1;
   padding: 4px 8px;
   border-radius: 4px;
-  background: rgba(15, 17, 22, 0.92);
-  color: rgba(255, 255, 255, 0.88);
+  background: rgba(82, 92, 108, 0.95);
+  color: rgba(255, 255, 255, 0.92);
   pointer-events: none;
   opacity: 0;
-  transition: opacity 0.1s ease 0.2s;
+  transition: opacity 0.4s ease; /* ゆっくり消える */
   z-index: 10;
 }
 
-/* ok/ok-raw/fail フィードバック中は tooltip を非表示 */
+/* ok/ok-raw/fail フィードバック中は tooltip を非表示。hover 中は速く表示 */
 [data-gpcb-copy-btn]:not(.gpcb-copy-ok):not(.gpcb-copy-ok-raw):not(.gpcb-copy-fail):hover::after {
   opacity: 1;
+  transition: opacity 0.1s ease 0.2s; /* 200ms 遅延後に素早く表示 */
 }
 
 [data-gpcb-copy-btn]:hover {
