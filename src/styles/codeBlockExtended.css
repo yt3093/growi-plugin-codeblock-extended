@@ -226,8 +226,9 @@ pre.gpcb-enhanced > div > code {
    背景色）を無効化し、gpcb-diff-overlay の背景色のみで差分を表現する。
    !important でインラインスタイル（Shiki）も上書きする。
    ================================================================ */
+/* Prism/Shiki が diff トークンに付ける背景色のみリセットし、文字色（シンタックスハイライト）は残す。
+   背景色は gpcb-diff-overlay に一元化することで、ガター幅まで含めた全行背景を統一する。 */
 pre.gpcb-enhanced code.language-diff .token {
-  color: inherit !important;
   background: none !important;
 }
 
