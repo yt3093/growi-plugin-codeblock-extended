@@ -203,11 +203,11 @@ function setCopyBtnState(btn: HTMLButtonElement, state: CopyBtnState): void {
   const cfg = COPY_BTN_STATE_MAP[state];
   if (cfg.className) btn.classList.add(cfg.className);
   btn.setAttribute('aria-label', cfg.label);
-  btn.title = cfg.label;
+  btn.setAttribute('data-gpcb-tooltip', cfg.label);
   if (state === 'copy' && btn.hasAttribute(COPY_BTN_DIFF_ATTR)) {
     const diffLabel = 'コードをコピー (Shift+クリック: diff 全体をコピー)';
     btn.setAttribute('aria-label', diffLabel);
-    btn.title = diffLabel;
+    btn.setAttribute('data-gpcb-tooltip', diffLabel);
   }
   btn.appendChild(cfg.icon());
 }

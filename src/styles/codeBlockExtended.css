@@ -47,6 +47,7 @@ pre.gpcb-enhanced:has(> .gpcb-filename) .gpcb-toolbar {
 
 /* copy button */
 [data-gpcb-copy-btn] {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -60,6 +61,31 @@ pre.gpcb-enhanced:has(> .gpcb-filename) .gpcb-toolbar {
   cursor: pointer;
   flex-shrink: 0;
   transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+/* カスタム tooltip: ブラウザデフォルトより短い遅延で表示 */
+[data-gpcb-copy-btn]::after {
+  content: attr(data-gpcb-tooltip);
+  position: absolute;
+  top: calc(100% + 5px);
+  right: 0;
+  white-space: nowrap;
+  font-family: var(--bs-font-monospace, ui-monospace, SFMono-Regular, monospace);
+  font-size: 0.68rem;
+  line-height: 1;
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: rgba(15, 17, 22, 0.92);
+  color: rgba(255, 255, 255, 0.88);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.1s ease 0.2s;
+  z-index: 10;
+}
+
+/* ok/ok-raw/fail フィードバック中は tooltip を非表示 */
+[data-gpcb-copy-btn]:not(.gpcb-copy-ok):not(.gpcb-copy-ok-raw):not(.gpcb-copy-fail):hover::after {
+  opacity: 1;
 }
 
 [data-gpcb-copy-btn]:hover {
@@ -126,7 +152,8 @@ pre.gpcb-enhanced .code-highlighted-title {
 /* prefers-reduced-motion: トランジション無効 */
 @media (prefers-reduced-motion: reduce) {
   .gpcb-toolbar,
-  [data-gpcb-copy-btn] {
+  [data-gpcb-copy-btn],
+  [data-gpcb-copy-btn]::after {
     transition: none;
   }
 }
