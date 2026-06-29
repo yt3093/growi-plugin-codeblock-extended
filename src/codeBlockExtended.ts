@@ -4,6 +4,7 @@ const ENHANCED_ATTR = 'data-gpcb-enhanced';
 const NO_COPY_ATTR = 'data-no-copy';
 const COPY_BTN_ATTR = 'data-gpcb-copy-btn';
 const COPY_CLASS_OK = 'gpcb-copy-ok';
+const COPY_CLASS_OK_RAW = 'gpcb-copy-ok-raw';
 const COPY_CLASS_FAIL = 'gpcb-copy-fail';
 const COPY_FEEDBACK_MS = 2000;
 const SVG_NS = 'http://www.w3.org/2000/svg';
@@ -44,7 +45,7 @@ const NAVBAR_SELECTORS = [
   'nav.navbar.sticky-top',
 ];
 
-type CopyBtnState = 'copy' | 'ok' | 'fail';
+type CopyBtnState = 'copy' | 'ok' | 'ok-raw' | 'fail';
 type DiffLineType = 'added' | 'removed' | 'hunk' | 'context';
 
 interface LinenumConfig {
@@ -159,6 +160,11 @@ const COPY_BTN_STATE_MAP: Record<CopyBtnState, { icon: () => SVGSVGElement; labe
     label: 'クリップボードにコピーしました',
     className: COPY_CLASS_OK,
   },
+  'ok-raw': {
+    icon: makeCopyOkIcon,
+    label: 'diff 全体をクリップボードにコピーしました',
+    className: COPY_CLASS_OK_RAW,
+  },
   'fail': {
     icon: makeFailIcon,
     label: 'クリップボードへのコピーに失敗しました',
@@ -168,7 +174,7 @@ const COPY_BTN_STATE_MAP: Record<CopyBtnState, { icon: () => SVGSVGElement; labe
 
 function setCopyBtnState(btn: HTMLButtonElement, state: CopyBtnState): void {
   while (btn.firstChild) btn.removeChild(btn.firstChild);
-  btn.classList.remove(COPY_CLASS_OK, COPY_CLASS_FAIL);
+  btn.classList.remove(COPY_CLASS_OK, COPY_CLASS_OK_RAW, COPY_CLASS_FAIL);
   const cfg = COPY_BTN_STATE_MAP[state];
   if (cfg.className) btn.classList.add(cfg.className);
   btn.setAttribute('aria-label', cfg.label);
@@ -176,7 +182,7 @@ function setCopyBtnState(btn: HTMLButtonElement, state: CopyBtnState): void {
   btn.appendChild(cfg.icon());
 }
 
-function flashCopyState(btn: HTMLButtonElement, state: 'ok' | 'fail', pre: HTMLPreElement): void {
+function flashCopyState(btn: HTMLButtonElement, state: 'ok' | 'ok-raw' | 'fail', pre: HTMLPreElement): void {
   const refs = blockRefs.get(pre);
   if (refs?.copyTimerId !== undefined) window.clearTimeout(refs.copyTimerId);
   setCopyBtnState(btn, state);
@@ -189,9 +195,10 @@ function flashCopyState(btn: HTMLButtonElement, state: 'ok' | 'fail', pre: HTMLP
 
 function handleCopyClick(e: MouseEvent, code: HTMLElement, btn: HTMLButtonElement, pre: HTMLPreElement): void {
   const rawText = code.textContent ?? '';
-  const text = (!e.shiftKey && isDiffTarget(pre, code)) ? extractNewCode(rawText) : rawText;
+  const isRaw = e.shiftKey && isDiffTarget(pre, code);
+  const text = isRaw ? rawText : (isDiffTarget(pre, code) ? extractNewCode(rawText) : rawText);
   navigator.clipboard.writeText(text).then(
-    () => flashCopyState(btn, 'ok', pre),
+    () => flashCopyState(btn, isRaw ? 'ok-raw' : 'ok', pre),
     (err) => {
       console.warn('[gpcb] clipboard write failed:', err);
       flashCopyState(btn, 'fail', pre);
