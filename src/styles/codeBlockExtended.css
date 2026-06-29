@@ -251,14 +251,17 @@ pre.gpcb-enhanced code.language-diff .token {
 
 .gpcb-diff-gutter > span.gpcb-diff-add {
   color: var(--gpcb-diff-add-gutter-color, #3fb950);
+  background: var(--gpcb-diff-add-bg, rgba(46, 160, 67, 0.18));
 }
 
 .gpcb-diff-gutter > span.gpcb-diff-rm {
   color: var(--gpcb-diff-rm-gutter-color, #f85149);
+  background: var(--gpcb-diff-rm-bg, rgba(248, 81, 73, 0.18));
 }
 
 .gpcb-diff-gutter > span.gpcb-diff-hh {
   color: var(--gpcb-diff-hh-gutter-color, #a371f7);
+  background: var(--gpcb-diff-hunk-bg, rgba(163, 113, 247, 0.10));
 }
 
 /* diff オーバーレイの背景色 */
