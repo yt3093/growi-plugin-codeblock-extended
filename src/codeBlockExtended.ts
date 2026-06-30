@@ -16,7 +16,7 @@ const FILENAME_CLASS = 'gpcb-filename';
 const GROWI_FILENAME_SELECTOR = 'cite.code-highlighted-title';
 
 const NO_LANG_ATTR = 'data-no-lang';
-const LANG_BADGE_CLASS = 'gpcb-lang-badge';
+const LANG_ICON_CLASS = 'gpcb-lang-icon';
 const LANG_DISPLAY_MAP: Record<string, string> = {
   js: 'JavaScript', javascript: 'JavaScript',
   ts: 'TypeScript', typescript: 'TypeScript',
@@ -32,6 +32,35 @@ const LANG_DISPLAY_MAP: Record<string, string> = {
   java: 'Java',
   rb: 'Ruby', ruby: 'Ruby',
   php: 'PHP',
+};
+const LANG_ICON_MAP: Record<string, { color: string; abbr: string }> = {
+  js:         { color: '#f0b800', abbr: 'JS' },
+  javascript: { color: '#f0b800', abbr: 'JS' },
+  ts:         { color: '#3178c6', abbr: 'TS' },
+  typescript: { color: '#3178c6', abbr: 'TS' },
+  py:         { color: '#3572a5', abbr: 'PY' },
+  python:     { color: '#3572a5', abbr: 'PY' },
+  sh:         { color: '#4eaa25', abbr: 'SH' },
+  bash:       { color: '#4eaa25', abbr: 'SH' },
+  shell:      { color: '#4eaa25', abbr: 'SH' },
+  html:       { color: '#e34f26', abbr: 'HT' },
+  css:        { color: '#264de4', abbr: 'CS' },
+  json:       { color: '#5a9e47', abbr: '{}' },
+  yml:        { color: '#cb171e', abbr: 'YM' },
+  yaml:       { color: '#cb171e', abbr: 'YM' },
+  md:         { color: '#655e9d', abbr: 'MD' },
+  markdown:   { color: '#655e9d', abbr: 'MD' },
+  diff:       { color: '#838383', abbr: '±'  },
+  sql:        { color: '#e38c00', abbr: 'SQ' },
+  go:         { color: '#00acd7', abbr: 'GO' },
+  rs:         { color: '#ce4a00', abbr: 'RS' },
+  rust:       { color: '#ce4a00', abbr: 'RS' },
+  c:          { color: '#005a8c', abbr: 'C'  },
+  cpp:        { color: '#00599c', abbr: 'C+' },
+  java:       { color: '#b07219', abbr: 'JV' },
+  rb:         { color: '#cc342d', abbr: 'RB' },
+  ruby:       { color: '#cc342d', abbr: 'RB' },
+  php:        { color: '#787cb4', abbr: 'PH' },
 };
 
 const NO_LINENUM_ATTR = 'data-no-linenum';
@@ -76,7 +105,6 @@ interface LinenumConfig {
 interface BlockRefs {
   toolbar: HTMLDivElement;
   filenameLabel: HTMLSpanElement | null;
-  langBadge: HTMLSpanElement | null;
   lineNums: HTMLElement | null;
   diffGutter: HTMLElement | null;
   codeWrap: HTMLDivElement | null;
@@ -192,6 +220,33 @@ function makeFailIcon(): SVGSVGElement {
     { tag: 'path', attrs: { d: 'M18 6 6 18' } },
     { tag: 'path', attrs: { d: 'm6 6 12 12' } },
   ]);
+}
+
+function makeLangIcon(lang: string): SVGSVGElement | null {
+  const def = LANG_ICON_MAP[lang];
+  if (!def) return null;
+  const svg = createSvgEl('svg', {
+    width: '14', height: '16', viewBox: '0 0 12 14',
+    fill: 'none', 'aria-hidden': 'true', class: LANG_ICON_CLASS,
+  }) as SVGSVGElement;
+  svg.appendChild(createSvgEl('path', {
+    d: 'M0.5 0.5 H7.5 L11.5 4.5 V13.5 H0.5 Z',
+    fill: def.color, opacity: '0.9',
+  }));
+  svg.appendChild(createSvgEl('path', {
+    d: 'M7.5 0.5 V4.5 H11.5 Z',
+    fill: 'rgba(255,255,255,0.35)',
+  }));
+  const textEl = createSvgEl('text', {
+    x: '6', y: '11',
+    'text-anchor': 'middle',
+    'font-size': '4.8',
+    fill: 'white', 'font-weight': '700',
+    'font-family': 'monospace, ui-monospace',
+  });
+  textEl.textContent = def.abbr;
+  svg.appendChild(textEl);
+  return svg;
 }
 
 const COPY_BTN_STATE_MAP: Record<CopyBtnState, { icon: () => SVGSVGElement; label: string; className: string | null }> = {
@@ -448,23 +503,6 @@ function setupDiffView(pre: HTMLPreElement, code: HTMLElement): void {
 
 // --- setup / enhance / cleanup ---
 
-function setupFilenameLabel(pre: HTMLPreElement): void {
-  if (pre.hasAttribute(NO_FILENAME_ATTR)) return;
-  const cite = pre.querySelector<HTMLElement>(GROWI_FILENAME_SELECTOR);
-  if (!cite) return;
-  const filename = cite.textContent?.trim().replace(/\s*\{[^}]*\}\s*$/, '').trim();
-  if (!filename) return;
-
-  const label = document.createElement('span');
-  label.className = FILENAME_CLASS;
-  label.setAttribute(FILENAME_ATTR, filename);
-  label.textContent = filename;
-  pre.prepend(label);
-
-  const refs = blockRefs.get(pre);
-  if (refs) refs.filenameLabel = label;
-}
-
 function extractLanguage(code: HTMLElement): string | null {
   for (const cls of code.classList) {
     if (cls.startsWith('language-')) {
@@ -475,24 +513,29 @@ function extractLanguage(code: HTMLElement): string | null {
   return null;
 }
 
-function setupLanguageBadge(pre: HTMLPreElement, code: HTMLElement): void {
-  if (pre.hasAttribute(NO_LANG_ATTR)) return;
-  const rawLang = extractLanguage(code);
-  if (!rawLang) return;
-  const displayName = LANG_DISPLAY_MAP[rawLang] ?? rawLang;
+function setupFilenameLabel(pre: HTMLPreElement, code: HTMLElement): void {
+  if (pre.hasAttribute(NO_FILENAME_ATTR)) return;
 
-  const badge = document.createElement('span');
-  badge.className = LANG_BADGE_CLASS;
-  badge.textContent = displayName;
-  badge.setAttribute('aria-hidden', 'true');
+  const cite = pre.querySelector<HTMLElement>(GROWI_FILENAME_SELECTOR);
+  const filename = cite?.textContent?.trim().replace(/\s*\{[^}]*\}\s*$/, '').trim() || null;
+  const lang = pre.hasAttribute(NO_LANG_ATTR) ? null : extractLanguage(code);
+
+  if (!filename && !lang) return;
+
+  const label = document.createElement('span');
+  label.className = FILENAME_CLASS;
+  if (filename) label.setAttribute(FILENAME_ATTR, filename);
+
+  if (lang) {
+    const icon = makeLangIcon(lang);
+    if (icon) label.appendChild(icon);
+  }
+
+  label.appendChild(document.createTextNode(filename ?? (LANG_DISPLAY_MAP[lang!] ?? lang!)));
+  pre.prepend(label);
 
   const refs = blockRefs.get(pre);
-  if (refs?.filenameLabel) {
-    refs.filenameLabel.after(badge);
-  } else {
-    pre.prepend(badge);
-  }
-  if (refs) refs.langBadge = badge;
+  if (refs) refs.filenameLabel = label;
 }
 
 function setupLineNumbers(pre: HTMLPreElement, code: HTMLElement): void {
@@ -603,14 +646,13 @@ function enhanceCodeBlock(pre: HTMLPreElement): void {
   const toolbar = document.createElement('div');
   toolbar.className = 'gpcb-toolbar';
 
-  blockRefs.set(pre, { toolbar, filenameLabel: null, langBadge: null, lineNums: null, diffGutter: null, codeWrap: null, hlOverlay: null, hlScrollHandler: null, copyBtn: null, copyHandler: null });
+  blockRefs.set(pre, { toolbar, filenameLabel: null, lineNums: null, diffGutter: null, codeWrap: null, hlOverlay: null, hlScrollHandler: null, copyBtn: null, copyHandler: null });
 
   setupCopyButton(toolbar, code, pre);
 
   pre.classList.add('gpcb-enhanced');
   pre.prepend(toolbar);
-  setupFilenameLabel(pre);
-  setupLanguageBadge(pre, code);
+  setupFilenameLabel(pre, code);
   if (isDiffTarget(pre, code)) {
     setupDiffView(pre, code);
   } else {
@@ -637,7 +679,6 @@ function cleanupBlock(pre: HTMLPreElement): void {
     }
     refs.lineNums?.remove();
     refs.diffGutter?.remove();
-    refs.langBadge?.remove();
     refs.filenameLabel?.remove();
     refs.toolbar.remove();
     blockRefs.delete(pre);
@@ -700,7 +741,6 @@ export function createCodeBlockExtended(): { mount(): void; unmount(): void } {
             if (
               el.classList?.contains('gpcb-toolbar') ||
               el.classList?.contains(FILENAME_CLASS) ||
-              el.classList?.contains(LANG_BADGE_CLASS) ||
               el.classList?.contains(LINENUMS_CLASS) ||
               el.classList?.contains(DIFF_GUTTER_CLASS) ||
               el.classList?.contains(CODE_WRAP_CLASS) ||
@@ -714,7 +754,8 @@ export function createCodeBlockExtended(): { mount(): void; unmount(): void } {
               if (parentPre) {
                 const refs = blockRefs.get(parentPre);
                 if (refs && !refs.filenameLabel) {
-                  setupFilenameLabel(parentPre);
+                  const code = parentPre.querySelector<HTMLElement>('code');
+                  if (code) setupFilenameLabel(parentPre, code);
                 }
               }
               continue;
