@@ -595,6 +595,16 @@ function makeLangIcon(lang: string): SVGSVGElement {
     width: '16', height: '16', viewBox: def.vb,
     'aria-hidden': 'true', class: LANG_ICON_CLASS,
   }) as SVGSVGElement;
+  // 白チップ背景: ラベル背景が暗いため全アイコンに付与。
+  // 既に colored rect を持つカスタムアイコンはその rect が上書きするため外観変化なし。
+  const vbParts = def.vb.split(' ');
+  const vbW = vbParts[2];
+  const vbH = vbParts[3];
+  svg.appendChild(createSvgEl('rect', {
+    width: vbW, height: vbH,
+    rx: String(Math.round(Number(vbW) * 0.1)),
+    fill: 'rgba(255,255,255,0.90)',
+  }));
   for (const el of def.els) {
     const elem = createSvgEl(el.tag, el.attrs);
     if (el.text !== undefined) elem.textContent = el.text;
