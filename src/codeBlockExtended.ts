@@ -15,6 +15,25 @@ const FILENAME_ATTR = 'data-gpcb-filename';
 const FILENAME_CLASS = 'gpcb-filename';
 const GROWI_FILENAME_SELECTOR = 'cite.code-highlighted-title';
 
+const NO_LANG_ATTR = 'data-no-lang';
+const LANG_BADGE_CLASS = 'gpcb-lang-badge';
+const LANG_DISPLAY_MAP: Record<string, string> = {
+  js: 'JavaScript', javascript: 'JavaScript',
+  ts: 'TypeScript', typescript: 'TypeScript',
+  py: 'Python',     python: 'Python',
+  sh: 'Bash',       bash: 'Bash', shell: 'Bash',
+  html: 'HTML', css: 'CSS', json: 'JSON',
+  yml: 'YAML', yaml: 'YAML',
+  md: 'Markdown', markdown: 'Markdown',
+  diff: 'Diff', sql: 'SQL',
+  go: 'Go',
+  rs: 'Rust', rust: 'Rust',
+  c: 'C', cpp: 'C++',
+  java: 'Java',
+  rb: 'Ruby', ruby: 'Ruby',
+  php: 'PHP',
+};
+
 const NO_LINENUM_ATTR = 'data-no-linenum';
 const LINENUMS_CLASS = 'gpcb-linenums';
 const LINENUM_HL_CLASS = 'gpcb-linenum-hl';
@@ -57,6 +76,7 @@ interface LinenumConfig {
 interface BlockRefs {
   toolbar: HTMLDivElement;
   filenameLabel: HTMLSpanElement | null;
+  langBadge: HTMLSpanElement | null;
   lineNums: HTMLElement | null;
   diffGutter: HTMLElement | null;
   codeWrap: HTMLDivElement | null;
@@ -445,6 +465,36 @@ function setupFilenameLabel(pre: HTMLPreElement): void {
   if (refs) refs.filenameLabel = label;
 }
 
+function extractLanguage(code: HTMLElement): string | null {
+  for (const cls of code.classList) {
+    if (cls.startsWith('language-')) {
+      const lang = cls.slice('language-'.length).replace(/\{[^}]*\}/, '').trim().toLowerCase();
+      if (lang) return lang;
+    }
+  }
+  return null;
+}
+
+function setupLanguageBadge(pre: HTMLPreElement, code: HTMLElement): void {
+  if (pre.hasAttribute(NO_LANG_ATTR)) return;
+  const rawLang = extractLanguage(code);
+  if (!rawLang) return;
+  const displayName = LANG_DISPLAY_MAP[rawLang] ?? rawLang;
+
+  const badge = document.createElement('span');
+  badge.className = LANG_BADGE_CLASS;
+  badge.textContent = displayName;
+  badge.setAttribute('aria-hidden', 'true');
+
+  const refs = blockRefs.get(pre);
+  if (refs?.filenameLabel) {
+    refs.filenameLabel.after(badge);
+  } else {
+    pre.prepend(badge);
+  }
+  if (refs) refs.langBadge = badge;
+}
+
 function setupLineNumbers(pre: HTMLPreElement, code: HTMLElement): void {
   if (pre.hasAttribute(NO_LINENUM_ATTR)) return;
 
@@ -553,13 +603,14 @@ function enhanceCodeBlock(pre: HTMLPreElement): void {
   const toolbar = document.createElement('div');
   toolbar.className = 'gpcb-toolbar';
 
-  blockRefs.set(pre, { toolbar, filenameLabel: null, lineNums: null, diffGutter: null, codeWrap: null, hlOverlay: null, hlScrollHandler: null, copyBtn: null, copyHandler: null });
+  blockRefs.set(pre, { toolbar, filenameLabel: null, langBadge: null, lineNums: null, diffGutter: null, codeWrap: null, hlOverlay: null, hlScrollHandler: null, copyBtn: null, copyHandler: null });
 
   setupCopyButton(toolbar, code, pre);
 
   pre.classList.add('gpcb-enhanced');
   pre.prepend(toolbar);
   setupFilenameLabel(pre);
+  setupLanguageBadge(pre, code);
   if (isDiffTarget(pre, code)) {
     setupDiffView(pre, code);
   } else {
@@ -586,6 +637,7 @@ function cleanupBlock(pre: HTMLPreElement): void {
     }
     refs.lineNums?.remove();
     refs.diffGutter?.remove();
+    refs.langBadge?.remove();
     refs.filenameLabel?.remove();
     refs.toolbar.remove();
     blockRefs.delete(pre);
@@ -648,6 +700,7 @@ export function createCodeBlockExtended(): { mount(): void; unmount(): void } {
             if (
               el.classList?.contains('gpcb-toolbar') ||
               el.classList?.contains(FILENAME_CLASS) ||
+              el.classList?.contains(LANG_BADGE_CLASS) ||
               el.classList?.contains(LINENUMS_CLASS) ||
               el.classList?.contains(DIFF_GUTTER_CLASS) ||
               el.classList?.contains(CODE_WRAP_CLASS) ||

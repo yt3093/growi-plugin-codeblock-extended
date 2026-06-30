@@ -41,7 +41,8 @@ pre.gpcb-enhanced:focus-within .gpcb-toolbar {
    コードブロック開始位置 = (6px top-pad + 1.05rem text + 10px bottom-pad) - 12px margin + 0.5rem Prism margin
                          = 4px + 1.55rem
    + 0.4rem コードブロック内オフセット */
-pre.gpcb-enhanced:has(> .gpcb-filename) .gpcb-toolbar {
+pre.gpcb-enhanced:has(> .gpcb-filename) .gpcb-toolbar,
+pre.gpcb-enhanced:has(> .gpcb-lang-badge) .gpcb-toolbar {
   top: calc(4px + 1.95rem);
 }
 
@@ -158,6 +159,35 @@ pre.gpcb-enhanced .code-highlighted-title {
   text-overflow: ellipsis;
 }
 
+/* 言語バッジ: ファイル名ラベルと同位置・同スタイル */
+.gpcb-lang-badge {
+  display: block;
+  width: fit-content;
+  padding: 6px 12px 10px;
+  margin: 0 0 -12px 0;
+  font-family: var(--bs-font-monospace, ui-monospace, SFMono-Regular, monospace);
+  font-size: 0.75rem;
+  line-height: 1.4;
+  color: rgba(255, 255, 255, 0.9);
+  background: #323e52;
+  border-radius: 0.3em 0.3em 0 0;
+  user-select: none;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+/* ファイル名と言語バッジが共存するとき: 横並びタブ */
+.gpcb-filename + .gpcb-lang-badge {
+  display: inline-block;
+  vertical-align: bottom;
+  margin-left: 2px;
+}
+
+pre.gpcb-enhanced:has(> .gpcb-lang-badge) .gpcb-filename {
+  display: inline-block;
+  vertical-align: bottom;
+}
+
 /* prefers-reduced-motion: トランジション無効 */
 @media (prefers-reduced-motion: reduce) {
   .gpcb-toolbar,
@@ -255,6 +285,7 @@ pre.gpcb-enhanced > div > code {
 @media print {
   .gpcb-toolbar,
   .gpcb-filename,
+  .gpcb-lang-badge,
   .gpcb-linenums,
   .gpcb-diff-gutter,
   .gpcb-hl-overlay {
