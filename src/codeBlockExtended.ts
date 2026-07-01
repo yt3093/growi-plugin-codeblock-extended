@@ -365,9 +365,9 @@ const _LATEX: LangIconDef = { vb: '0 0 60 60', els: [
   { tag: 'text', attrs: { x: '30', y: '43', 'text-anchor': 'middle', 'font-size': '20', fill: '#fff', 'font-weight': '700', 'font-family': 'monospace, ui-monospace' }, text: 'TEX' },
 ]};
 // generic fallback document icon
-const _GENERIC: LangIconDef = { vb: '0 0 24 24', bg: 'rgba(255,255,255,0.90)', els: [
-  { tag: 'path', attrs: { d: 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z', fill: '#6b7280' } },
-  { tag: 'path', attrs: { d: 'M14 2v6h6', fill: 'none', stroke: '#9ca3af', 'stroke-width': '1.5', 'stroke-linejoin': 'round' } },
+const _GENERIC: LangIconDef = { vb: '0 0 24 24', els: [
+  { tag: 'path', attrs: { d: 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z', fill: 'rgba(255,255,255,0.55)' } },
+  { tag: 'path', attrs: { d: 'M14 2v6h6', fill: 'none', stroke: 'rgba(255,255,255,0.85)', 'stroke-width': '1.5', 'stroke-linejoin': 'round' } },
 ]};
 
 const LANG_ICON_MAP: Record<string, LangIconDef> = {
