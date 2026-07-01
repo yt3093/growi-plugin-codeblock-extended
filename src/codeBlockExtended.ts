@@ -462,7 +462,6 @@ type DiffLineType = 'added' | 'removed' | 'hunk' | 'context';
 interface LinenumConfig {
   start: number;
   highlights: Set<number>;
-  lang?: string;
 }
 
 interface BlockRefs {
@@ -702,8 +701,6 @@ function parseLinenumSpec(inner: string): LinenumConfig {
     if (key === 'start') {
       const n = parseInt(value, 10);
       if (!isNaN(n) && n >= 1) config.start = n;
-    } else if (key === 'lang') {
-      if (value) config.lang = value.toLowerCase();
     } else if (key === 'hl') {
       for (const part of value.split(',')) {
         const t = part.trim();
@@ -897,9 +894,7 @@ function setupFilenameLabel(pre: HTMLPreElement, code: HTMLElement): void {
 
   const cite = pre.querySelector<HTMLElement>(GROWI_FILENAME_SELECTOR);
   const filename = cite?.textContent?.trim().replace(/\s*\{[^}]*\}\s*$/, '').trim() || null;
-  const specStr = findLinenumSpec(pre, code);
-  const specLang = specStr ? parseLinenumSpec(specStr).lang ?? null : null;
-  const lang = pre.hasAttribute(NO_LANG_ATTR) ? null : (specLang ?? extractLanguage(code));
+  const lang = pre.hasAttribute(NO_LANG_ATTR) ? null : extractLanguage(code);
 
   if (!filename && !lang) return;
 
