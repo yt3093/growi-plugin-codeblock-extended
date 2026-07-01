@@ -274,6 +274,15 @@ pre.gpcb-enhanced > div > code {
 .gpcb-code-wrap::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.25);
   border-radius: 3px;
+  transition: background 0.15s ease;
+}
+
+pre.gpcb-enhanced:hover .gpcb-code-wrap {
+  scrollbar-color: rgba(255, 255, 255, 0.55) transparent;
+}
+
+pre.gpcb-enhanced:hover .gpcb-code-wrap::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.55);
 }
 
 /* 行番号 aside: gpcb-code-wrap の外に配置されるため横スクロールの影響を受けず常に左端に表示 */
