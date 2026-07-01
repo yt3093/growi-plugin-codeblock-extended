@@ -364,11 +364,6 @@ const _LATEX: LangIconDef = { vb: '0 0 60 60', els: [
   { tag: 'rect', attrs: { width: '60', height: '60', rx: '6', fill: '#2e7d32' } },
   { tag: 'text', attrs: { x: '30', y: '43', 'text-anchor': 'middle', 'font-size': '20', fill: '#fff', 'font-weight': '700', 'font-family': 'monospace, ui-monospace' }, text: 'TEX' },
 ]};
-// generic fallback document icon
-const _GENERIC: LangIconDef = { vb: '0 0 24 24', els: [
-  { tag: 'path', attrs: { d: 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z', fill: 'rgba(255,255,255,0.55)' } },
-  { tag: 'path', attrs: { d: 'M14 2v6h6', fill: 'none', stroke: 'rgba(255,255,255,0.85)', 'stroke-width': '1.5', 'stroke-linejoin': 'round' } },
-]};
 
 const LANG_ICON_MAP: Record<string, LangIconDef> = {
   js: _JS, javascript: _JS, jsx: _JS,
@@ -467,6 +462,7 @@ type DiffLineType = 'added' | 'removed' | 'hunk' | 'context';
 interface LinenumConfig {
   start: number;
   highlights: Set<number>;
+  lang?: string;
 }
 
 interface BlockRefs {
@@ -589,24 +585,43 @@ function makeFailIcon(): SVGSVGElement {
   ]);
 }
 
+function hashLangColor(lang: string): string {
+  let h = 0;
+  for (let i = 0; i < lang.length; i++) h = (h * 31 + lang.charCodeAt(i)) & 0xfffffff;
+  return `hsl(${h % 360}, 60%, 42%)`;
+}
+
 function makeLangIcon(lang: string): SVGSVGElement {
-  const def = LANG_ICON_MAP[lang] ?? _GENERIC;
+  const def = LANG_ICON_MAP[lang];
   const svg = createSvgEl('svg', {
-    width: '16', height: '16', viewBox: def.vb,
+    width: '16', height: '16', viewBox: def ? def.vb : '0 0 60 60',
     'aria-hidden': 'true', class: LANG_ICON_CLASS,
   }) as SVGSVGElement;
-  if (def.bg) {
-    const parts = def.vb.split(' ');
-    svg.appendChild(createSvgEl('rect', {
-      width: parts[2], height: parts[3],
-      rx: String(Math.round(Number(parts[2]) * 0.1)),
-      fill: def.bg,
-    }));
-  }
-  for (const el of def.els) {
-    const elem = createSvgEl(el.tag, el.attrs);
-    if (el.text !== undefined) elem.textContent = el.text;
-    svg.appendChild(elem);
+  if (def) {
+    if (def.bg) {
+      const parts = def.vb.split(' ');
+      svg.appendChild(createSvgEl('rect', {
+        width: parts[2], height: parts[3],
+        rx: String(Math.round(Number(parts[2]) * 0.1)),
+        fill: def.bg,
+      }));
+    }
+    for (const el of def.els) {
+      const elem = createSvgEl(el.tag, el.attrs);
+      if (el.text !== undefined) elem.textContent = el.text;
+      svg.appendChild(elem);
+    }
+  } else {
+    const abbr = lang.slice(0, 2).toUpperCase();
+    svg.appendChild(createSvgEl('rect', { width: '60', height: '60', rx: '6', fill: hashLangColor(lang) }));
+    const text = createSvgEl('text', {
+      x: '30', y: abbr.length === 1 ? '44' : '43',
+      'text-anchor': 'middle',
+      'font-size': abbr.length === 1 ? '32' : '26',
+      fill: '#fff', 'font-weight': '700', 'font-family': 'monospace, ui-monospace',
+    });
+    text.textContent = abbr;
+    svg.appendChild(text);
   }
   return svg;
 }
@@ -687,6 +702,8 @@ function parseLinenumSpec(inner: string): LinenumConfig {
     if (key === 'start') {
       const n = parseInt(value, 10);
       if (!isNaN(n) && n >= 1) config.start = n;
+    } else if (key === 'lang') {
+      if (value) config.lang = value.toLowerCase();
     } else if (key === 'hl') {
       for (const part of value.split(',')) {
         const t = part.trim();
@@ -880,7 +897,9 @@ function setupFilenameLabel(pre: HTMLPreElement, code: HTMLElement): void {
 
   const cite = pre.querySelector<HTMLElement>(GROWI_FILENAME_SELECTOR);
   const filename = cite?.textContent?.trim().replace(/\s*\{[^}]*\}\s*$/, '').trim() || null;
-  const lang = pre.hasAttribute(NO_LANG_ATTR) ? null : extractLanguage(code);
+  const specStr = findLinenumSpec(pre, code);
+  const specLang = specStr ? parseLinenumSpec(specStr).lang ?? null : null;
+  const lang = pre.hasAttribute(NO_LANG_ATTR) ? null : (specLang ?? extractLanguage(code));
 
   if (!filename && !lang) return;
 
