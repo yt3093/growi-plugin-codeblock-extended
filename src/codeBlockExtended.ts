@@ -429,6 +429,8 @@ const NO_LINENUM_ATTR = 'data-no-linenum';
 const LINENUMS_CLASS = 'gpcb-linenums';
 const LINENUM_HL_CLASS = 'gpcb-linenum-hl';
 const CODE_WRAP_CLASS = 'gpcb-code-wrap';
+const CODE_OUTER_CLASS = 'gpcb-code-outer';
+const NO_OVERFLOW_FADE_ATTR = 'data-no-overflow-fade';
 const HL_OVERLAY_CLASS = 'gpcb-hl-overlay';
 const HL_LINE_CLASS = 'gpcb-hl-line';
 const HL_LINE_HL_CLASS = 'gpcb-hl-line-hl';
@@ -471,6 +473,9 @@ interface BlockRefs {
   lineNums: HTMLElement | null;
   diffGutter: HTMLElement | null;
   codeWrap: HTMLDivElement | null;
+  codeOuter: HTMLDivElement | null;
+  overflowObserver: ResizeObserver | null;
+  overflowScrollHandler: (() => void) | null;
   hlOverlay: HTMLDivElement | null;
   hlScrollHandler: (() => void) | null;
   copyBtn: HTMLButtonElement | null;
@@ -503,6 +508,43 @@ function isHiddenContext(): boolean {
 
 function isInEditorDOM(pre: HTMLPreElement): boolean {
   return !!pre.closest('.CodeMirror, .cm-editor, [contenteditable="true"]');
+}
+
+// --- overflow fade ---
+
+function getCodeBg(code: HTMLElement, pre: HTMLPreElement): string {
+  let el: HTMLElement | null = code;
+  while (el && el !== pre.parentElement) {
+    const bg = getComputedStyle(el).backgroundColor;
+    if (bg && bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent') return bg;
+    el = el.parentElement;
+  }
+  return 'rgb(40, 44, 52)';
+}
+
+function setupOverflowFade(codeOuter: HTMLDivElement, codeWrap: HTMLDivElement, code: HTMLElement, pre: HTMLPreElement): void {
+  if (pre.hasAttribute(NO_OVERFLOW_FADE_ATTR)) return;
+
+  codeOuter.style.setProperty('--gpcb-overflow-bg', getCodeBg(code, pre));
+
+  const update = () => {
+    const hasLeft  = codeWrap.scrollLeft > 1;
+    const hasRight = codeWrap.scrollLeft + codeWrap.clientWidth < codeWrap.scrollWidth - 1;
+    codeOuter.classList.toggle('gpcb-of-left',  hasLeft);
+    codeOuter.classList.toggle('gpcb-of-right', hasRight);
+  };
+
+  codeWrap.addEventListener('scroll', update, { passive: true });
+
+  const ro = new ResizeObserver(update);
+  ro.observe(codeWrap);
+  requestAnimationFrame(update);
+
+  const refs = blockRefs.get(pre);
+  if (refs) {
+    refs.overflowObserver = ro;
+    refs.overflowScrollHandler = update;
+  }
 }
 
 // --- SVG helpers ---
@@ -848,13 +890,16 @@ function setupDiffView(pre: HTMLPreElement, code: HTMLElement): void {
     hlOverlay.appendChild(row);
   }
 
+  const codeOuter = document.createElement('div');
+  codeOuter.className = CODE_OUTER_CLASS;
   const codeWrap = document.createElement('div');
   codeWrap.className = CODE_WRAP_CLASS;
-  code.parentNode!.insertBefore(codeWrap, code);
+  code.parentNode!.insertBefore(codeOuter, code);
+  codeOuter.appendChild(codeWrap);
   codeWrap.appendChild(code);
   codeWrap.prepend(hlOverlay);
 
-  // DOM 順: [linenum] [diff-gutter] [code-wrap]
+  // DOM 順: [linenum] [diff-gutter] [code-outer]
   // prepend は先頭挿入なので逆順で呼ぶ
   inner.prepend(diffGutter);
   if (linenumsAside) inner.prepend(linenumsAside);
@@ -864,6 +909,7 @@ function setupDiffView(pre: HTMLPreElement, code: HTMLElement): void {
     refs.lineNums = linenumsAside;
     refs.diffGutter = diffGutter;
     refs.codeWrap = codeWrap;
+    refs.codeOuter = codeOuter;
     refs.hlOverlay = hlOverlay;
     const onScroll = () => {
       hlOverlay.style.transform = `translateX(${codeWrap.scrollLeft}px)`;
@@ -871,6 +917,7 @@ function setupDiffView(pre: HTMLPreElement, code: HTMLElement): void {
     codeWrap.addEventListener('scroll', onScroll, { passive: true });
     refs.hlScrollHandler = onScroll;
   }
+  setupOverflowFade(codeOuter, codeWrap, code, pre);
 }
 
 // --- setup / enhance / cleanup ---
@@ -943,9 +990,12 @@ function setupLineNumbers(pre: HTMLPreElement, code: HTMLElement): void {
   }
 
   // <code> を横スクロールコンテナで包む（aside を scroll の外に出して左固定を実現）
+  const codeOuter = document.createElement('div');
+  codeOuter.className = CODE_OUTER_CLASS;
   const codeWrap = document.createElement('div');
   codeWrap.className = CODE_WRAP_CLASS;
-  code.parentNode!.insertBefore(codeWrap, code);
+  code.parentNode!.insertBefore(codeOuter, code);
+  codeOuter.appendChild(codeWrap);
   codeWrap.appendChild(code);
 
   // ハイライト行があればオーバーレイを挿入（flex 等分割で line-height 計測不要）
@@ -970,6 +1020,7 @@ function setupLineNumbers(pre: HTMLPreElement, code: HTMLElement): void {
   if (refs) {
     refs.lineNums = aside;
     refs.codeWrap = codeWrap;
+    refs.codeOuter = codeOuter;
     refs.hlOverlay = hlOverlay;
     if (hlOverlay) {
       const onScroll = () => {
@@ -979,6 +1030,7 @@ function setupLineNumbers(pre: HTMLPreElement, code: HTMLElement): void {
       refs.hlScrollHandler = onScroll;
     }
   }
+  setupOverflowFade(codeOuter, codeWrap, code, pre);
 }
 
 function setupCopyButton(toolbar: HTMLDivElement, code: HTMLElement, pre: HTMLPreElement): void {
@@ -1019,7 +1071,7 @@ function enhanceCodeBlock(pre: HTMLPreElement): void {
   const toolbar = document.createElement('div');
   toolbar.className = 'gpcb-toolbar';
 
-  blockRefs.set(pre, { toolbar, filenameLabel: null, lineNums: null, diffGutter: null, codeWrap: null, hlOverlay: null, hlScrollHandler: null, copyBtn: null, copyHandler: null });
+  blockRefs.set(pre, { toolbar, filenameLabel: null, lineNums: null, diffGutter: null, codeWrap: null, codeOuter: null, overflowObserver: null, overflowScrollHandler: null, hlOverlay: null, hlScrollHandler: null, copyBtn: null, copyHandler: null });
 
   setupCopyButton(toolbar, code, pre);
 
@@ -1044,11 +1096,23 @@ function cleanupBlock(pre: HTMLPreElement): void {
     if (refs.hlScrollHandler && refs.codeWrap) {
       refs.codeWrap.removeEventListener('scroll', refs.hlScrollHandler);
     }
+    if (refs.overflowScrollHandler && refs.codeWrap) {
+      refs.codeWrap.removeEventListener('scroll', refs.overflowScrollHandler);
+    }
+    if (refs.overflowObserver) {
+      refs.overflowObserver.disconnect();
+    }
     if (refs.codeWrap?.isConnected) {
       while (refs.codeWrap.firstChild) {
         refs.codeWrap.parentNode!.insertBefore(refs.codeWrap.firstChild, refs.codeWrap);
       }
       refs.codeWrap.remove();
+    }
+    if (refs.codeOuter?.isConnected) {
+      while (refs.codeOuter.firstChild) {
+        refs.codeOuter.parentNode!.insertBefore(refs.codeOuter.firstChild, refs.codeOuter);
+      }
+      refs.codeOuter.remove();
     }
     refs.lineNums?.remove();
     refs.diffGutter?.remove();
@@ -1116,6 +1180,7 @@ export function createCodeBlockExtended(): { mount(): void; unmount(): void } {
               el.classList?.contains(FILENAME_CLASS) ||
               el.classList?.contains(LINENUMS_CLASS) ||
               el.classList?.contains(DIFF_GUTTER_CLASS) ||
+              el.classList?.contains(CODE_OUTER_CLASS) ||
               el.classList?.contains(CODE_WRAP_CLASS) ||
               el.classList?.contains(HL_OVERLAY_CLASS)
             ) continue;
@@ -1149,9 +1214,18 @@ export function createCodeBlockExtended(): { mount(): void; unmount(): void } {
                 if (refs.hlScrollHandler && refs.codeWrap) {
                   refs.codeWrap.removeEventListener('scroll', refs.hlScrollHandler);
                 }
+                if (refs.overflowScrollHandler && refs.codeWrap) {
+                  refs.codeWrap.removeEventListener('scroll', refs.overflowScrollHandler);
+                }
+                if (refs.overflowObserver) {
+                  refs.overflowObserver.disconnect();
+                }
                 refs.lineNums = null;
                 refs.diffGutter = null;
                 refs.codeWrap = null;
+                refs.codeOuter = null;
+                refs.overflowObserver = null;
+                refs.overflowScrollHandler = null;
                 refs.hlOverlay = null;
                 refs.hlScrollHandler = null;
                 const code = parentPre.querySelector<HTMLElement>('code');

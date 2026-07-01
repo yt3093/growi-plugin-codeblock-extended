@@ -177,7 +177,9 @@ pre.gpcb-enhanced .code-highlighted-title {
 @media (prefers-reduced-motion: reduce) {
   .gpcb-toolbar,
   [data-gpcb-copy-btn],
-  [data-gpcb-copy-btn]::after {
+  [data-gpcb-copy-btn]::after,
+  .gpcb-code-outer::before,
+  .gpcb-code-outer::after {
     transition: none;
   }
 }
@@ -194,11 +196,44 @@ pre.gpcb-enhanced > div > code {
   min-width: 0;
 }
 
+/* overflow fade ラッパー: aside の外に配置し flex item として伸縮する */
+.gpcb-code-outer {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  isolation: isolate; /* ::before/::after の z-index をこの要素内に封じ込め、toolbar を覆わない */
+}
+
+/* 左右フェードオーバーレイ: scroll の外に固定されるため常に可視領域の端に表示される */
+.gpcb-code-outer::before,
+.gpcb-code-outer::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 48px;
+  pointer-events: none;
+  z-index: 3; /* gpcb-hl-overlay (z-index:2) より前面 */
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.gpcb-code-outer::before {
+  left: 0;
+  background: linear-gradient(to right, var(--gpcb-overflow-bg, rgb(40, 44, 52)), transparent);
+}
+
+.gpcb-code-outer::after {
+  right: 0;
+  background: linear-gradient(to left, var(--gpcb-overflow-bg, rgb(40, 44, 52)), transparent);
+}
+
+.gpcb-code-outer.gpcb-of-left::before  { opacity: 1; }
+.gpcb-code-outer.gpcb-of-right::after  { opacity: 1; }
+
 /* コードのスクロールコンテナ: aside の外にあるため aside は常に左端に固定される */
 .gpcb-code-wrap {
   position: relative; /* hl-overlay の containing block */
-  flex: 1 1 auto;
-  min-width: 0;
   overflow-x: auto;
   overflow-y: clip;
   scrollbar-width: thin;
@@ -239,6 +274,15 @@ pre.gpcb-enhanced > div > code {
 .gpcb-code-wrap::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.25);
   border-radius: 3px;
+  transition: background 0.15s ease;
+}
+
+pre.gpcb-enhanced:hover .gpcb-code-wrap {
+  scrollbar-color: rgba(255, 255, 255, 0.55) transparent;
+}
+
+pre.gpcb-enhanced:hover .gpcb-code-wrap::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.55);
 }
 
 /* 行番号 aside: gpcb-code-wrap の外に配置されるため横スクロールの影響を受けず常に左端に表示 */
@@ -273,6 +317,12 @@ pre.gpcb-enhanced > div > code {
   .gpcb-linenums,
   .gpcb-diff-gutter,
   .gpcb-hl-overlay {
+    display: none !important;
+  }
+
+  /* 印刷時はフェードオーバーレイを非表示 */
+  .gpcb-code-outer::before,
+  .gpcb-code-outer::after {
     display: none !important;
   }
 
