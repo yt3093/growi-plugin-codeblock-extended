@@ -293,6 +293,14 @@ pre.gpcb-enhanced > div > code {
     overflow: visible !important;
   }
 
+  /* 長い行を折り返して紙面内に収める */
+  pre.gpcb-enhanced,
+  pre.gpcb-enhanced code {
+    white-space: pre-wrap !important;
+    word-break: break-all;
+    overflow-wrap: break-word;
+  }
+
   /* 行番号: グレー文字で表示 */
   .gpcb-linenums {
     color: #666 !important;
