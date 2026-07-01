@@ -11,9 +11,13 @@
   --gpcb-badge-fill:       rgba(20, 22, 28, 0.85);
 }
 
-/* pre にポジションコンテキストを付与 */
+/* pre にポジションコンテキストを付与。
+   Shiki/GROWI の overflow:auto インラインスタイルを打ち消し、
+   負マージン起因の余分な縦スクロールと tooltip のクリップを防ぐ。
+   横スクロールは .gpcb-code-wrap に委譲済みなので visible で問題ない。 */
 pre.gpcb-enhanced {
   position: relative;
+  overflow: visible !important;
 }
 
 /* toolbar: デフォルト非表示
@@ -158,6 +162,17 @@ pre.gpcb-enhanced .code-highlighted-title {
   text-overflow: ellipsis;
 }
 
+/* 言語アイコン: ファイル名ラベル内に inline 配置 */
+.gpcb-lang-icon {
+  display: inline-block;
+  vertical-align: middle;
+  margin-right: 5px;
+  position: relative;
+  top: -1px;
+  user-select: none;
+  pointer-events: none;
+}
+
 /* prefers-reduced-motion: トランジション無効 */
 @media (prefers-reduced-motion: reduce) {
   .gpcb-toolbar,
@@ -185,6 +200,7 @@ pre.gpcb-enhanced > div > code {
   flex: 1 1 auto;
   min-width: 0;
   overflow-x: auto;
+  overflow-y: clip;
   scrollbar-width: thin;
   scrollbar-color: rgba(255, 255, 255, 0.25) transparent;
 }

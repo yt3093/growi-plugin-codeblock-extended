@@ -11,6 +11,7 @@
 | 機能 | 説明 |
 |---|---|
 | ファイル名ラベル | `言語:ファイル名` 記法時のみ、コードブロック左上にタブ風で表示。コードブロック本体の下レイヤーに配置し（`padding-bottom` + 負の `margin-bottom` で底部を潜り込ませる）、ラベルテキストは選択可能。GROWI デフォルトの `<cite class="code-highlighted-title">` は CSS で非表示にして置き換える。`data-no-filename` で opt-out |
+| 言語アイコン | ファイル名ラベル左端に言語アイコンを表示。`LANG_ICON_MAP` に登録済みの言語は専用カラーアイコン（devicon ベース SVG）、未登録言語は汎用ファイルアイコン（白半透明）。`{lang=xxx}` spec オプションで `extractLanguage` の結果を上書き可能。アイコンは `<svg class="gpcb-lang-icon">` として DOM に挿入。`data-no-lang` で opt-out |
 | コピーボタン | コードブロック右上にボタンを**ホバー時のみ表示**（Zenn 風 UI）。通常クリックで `<code>` の `textContent` をコピー。diff ブロックでは通常クリック=新コードのみ（`+`/空白行から先頭記号を除去・削除行/ハンク行を除外）、Shift+クリック=raw diff テキスト |
 | 成功/失敗フィードバック | 通常コピー成功: 2 秒間 ✓ バッジ（緑）。diff raw コピー成功: 2 秒間 ± バッジ（青）。失敗: ✕ アイコン（赤）。2 秒後に元に戻る |
 | コピーボタン tooltip | ホバー時に `data-gpcb-tooltip` 属性値をカスタム CSS tooltip で表示（0.2s 遅延後 0.1s で表示、マウスが外れると 1.5s でゆっくり消える）。diff ブロックでは "Shift+Click: Copy RAW Diff" のヒントをツールチップに含める |
@@ -86,7 +87,7 @@ growi-plugin-codeblock-extended/
   2. `blockRefs.set(pre, { toolbar, filenameLabel: null, lineNums: null, codeWrap: null, hlOverlay: null, hlScrollHandler: null, copyBtn: null, copyHandler: null })` で WeakMap に登録
   3. `setupCopyButton(toolbar, code, pre)` — `navigator.clipboard.writeText` が利用可能かつ `data-no-copy` がなければボタンを生成
   4. `pre.classList.add('gpcb-enhanced')`、`pre.prepend(toolbar)`
-  5. `setupFilenameLabel(pre)` — `data-no-filename` がなく `<cite class="code-highlighted-title">` が存在すれば、その textContent を `<span class="gpcb-filename">` として prepend（DOM 順: [filename, toolbar, 元の中身]）
+  5. `setupFilenameLabel(pre)` — `data-no-filename` がなく `<cite class="code-highlighted-title">` が存在すれば、その textContent を `<span class="gpcb-filename">` として prepend（DOM 順: [filename, toolbar, 元の中身]）。`data-no-lang` がなければ `makeLangIcon(lang)` で言語アイコンを prepend。`lang` は `findLinenumSpec` + `parseLinenumSpec` の `lang` キーを優先し、なければ `extractLanguage(code)` を使用
   6. `setupLineNumbers(pre, code)` — `data-no-linenum` がなく Prism 内側 div が存在すれば、行数算出・spec 解析・aside 生成・code-wrap 生成・hlOverlay 生成・scroll リスナー登録を行う
   7. `pre.setAttribute('data-gpcb-enhanced', '1')`
 
@@ -102,7 +103,7 @@ growi-plugin-codeblock-extended/
 
 - **`findLinenumSpec(pre, code)`**: `<code>` の className を先に確認（`language-xxx{...}` 形式）。なければ `<cite class="code-highlighted-title">` のテキストを確認（ファイル名あり記法では cite に `file.py{...}` が残る）。`SPEC_RE = /\{([^}]+)\}/` でマッチ。
 
-- **`parseLinenumSpec(inner)`**: ルックアヘッド正規表現 `/(\w+)\s*=\s*([^=]*?)(?=,\s*\w+\s*=|$)/g` で key=value を抽出。`hl` の値内カンマ（例: `hl=3,5-7` の `,5-7`）を誤分割しないよう「次の key= が来るまで」を lookahead で吸収する。
+- **`parseLinenumSpec(inner)`**: ルックアヘッド正規表現 `/(\w+)\s*=\s*([^=]*?)(?=,\s*\w+\s*=|$)/g` で key=value を抽出。`hl` の値内カンマ（例: `hl=3,5-7` の `,5-7`）を誤分割しないよう「次の key= が来るまで」を lookahead で吸収する。`lang` キーも解析し `LinenumConfig.lang` に格納する（`setupFilenameLabel` のみ参照）。
 
 - **`isDiffTarget(pre, code)`**: `isDiffBlock(code)`（`language-diff` クラス判定）または `hasDiffModifier(pre, code)`（`{diff}` 修飾子判定）のいずれかが true なら diff ブロックと見なす。`hasDiffModifier` は `findLinenumSpec` でスペック文字列を取得し、カンマ区切りで分割して `'diff'` と完全一致するパートがあるかを確認する。diff ブロックと判定された場合は `setupDiffView` のみを呼び `setupLineNumbers` は呼ばない。このため `{hl=...}` や `{start=...}` を同時に指定しても**黙って無視**される（仕様）。
 
@@ -130,6 +131,8 @@ growi-plugin-codeblock-extended/
 | opt-out（ファイル名ラベル） | `data-no-filename` |
 | opt-out（行番号） | `data-no-linenum` |
 | opt-out（差分表示） | `data-no-diff` |
+| opt-out（言語アイコン） | `data-no-lang` |
+| 言語アイコンクラス | `gpcb-lang-icon` |
 | ファイル名ラベル属性 | `data-gpcb-filename` |
 | コピーボタン diff マーカー属性 | `data-gpcb-copy-diff` |
 | コピーボタン tooltip 属性 | `data-gpcb-tooltip` |
@@ -310,6 +313,10 @@ GROWI 管理画面 `/admin/plugins` で **削除 → 再インストール**。
 16. `<code>` の innerHTML が処理前後で完全一致（差分ゼロ）
 17. `.CodeMirror` / `.cm-editor` 配下の `<pre>` にはボタンが出ない（GROWI エディタとの競合なし）
 18. ` ```hcl:test.tf ``` 形式でコードブロック左上にファイル名ラベルが表示される
+18a. ` ```python:app.py ``` でラベル左端に Python カラーアイコンが表示される
+18b. ` ```unknown:file.txt ``` など未登録言語では汎用ファイルアイコン（白半透明）が表示される
+18c. ` ```none:config.env{lang=bash} ``` で Bash アイコンが表示される
+18d. `<pre data-no-lang>` で言語アイコンが非表示になる（ファイル名ラベルは出る）
 19. ` ```hcl ``` （ファイル名なし）ではラベルが出ない
 20. ラベルテキストをマウスで選択・コピーできる
 21. `<pre data-no-filename>` でラベルが非表示になる（コピーボタンは出る）
