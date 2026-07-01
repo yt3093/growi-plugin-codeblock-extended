@@ -267,14 +267,73 @@ pre.gpcb-enhanced > div > code {
   color: rgba(255, 235, 100, 0.9);
 }
 
-/* Print: toolbar / filename label / linenums / diff-gutter / hl-overlay を非表示 */
 @media print {
+  /* UI ボタン・ハイライトオーバーレイを非表示 */
   .gpcb-toolbar,
-  .gpcb-filename,
-  .gpcb-linenums,
-  .gpcb-diff-gutter,
   .gpcb-hl-overlay {
-    display: none;
+    display: none !important;
+  }
+
+  /* 白背景・黒文字に反転し、境界線でコードブロック範囲を明示 */
+  pre.gpcb-enhanced {
+    background: #fff !important;
+    border: 1px solid #ccc !important;
+    break-inside: avoid;
+  }
+
+  /* Shiki / Prism のインラインスタイル（文字色・背景色）を上書き */
+  pre.gpcb-enhanced code,
+  pre.gpcb-enhanced code * {
+    color: #000 !important;
+    background: transparent !important;
+  }
+
+  /* 横スクロールを解除してコード全体を出力 */
+  .gpcb-code-wrap {
+    overflow: visible !important;
+  }
+
+  /* 行番号: グレー文字で表示 */
+  .gpcb-linenums {
+    color: #666 !important;
+  }
+
+  /* ファイル名ラベル: 薄いグレー背景・黒文字で表示 */
+  .gpcb-filename {
+    color: #000 !important;
+    background: #e8e8e8 !important;
+  }
+
+  /* diff の追加行・削除行を印刷向けの淡い色に */
+  .gpcb-hl-line.gpcb-diff-line-add,
+  .gpcb-linenums > span.gpcb-diff-linenum-add {
+    background: #e6ffe6 !important;
+  }
+
+  .gpcb-hl-line.gpcb-diff-line-rm,
+  .gpcb-linenums > span.gpcb-diff-linenum-rm {
+    background: #ffe6e6 !important;
+  }
+
+  .gpcb-hl-line.gpcb-diff-line-hh,
+  .gpcb-linenums > span.gpcb-diff-linenum-hh {
+    background: #f0eaff !important;
+  }
+
+  /* diff ガター: +/- 記号を印刷向け色で表示 */
+  .gpcb-diff-gutter > span.gpcb-diff-add {
+    color: #1a7f1a !important;
+    background: #e6ffe6 !important;
+  }
+
+  .gpcb-diff-gutter > span.gpcb-diff-rm {
+    color: #c00 !important;
+    background: #ffe6e6 !important;
+  }
+
+  .gpcb-diff-gutter > span.gpcb-diff-hh {
+    color: #5c0d8a !important;
+    background: #f0eaff !important;
   }
 }
 
