@@ -201,6 +201,7 @@ pre.gpcb-enhanced > div > code {
   position: relative;
   flex: 1 1 auto;
   min-width: 0;
+  isolation: isolate; /* ::before/::after の z-index をこの要素内に封じ込め、toolbar を覆わない */
 }
 
 /* 左右フェードオーバーレイ: scroll の外に固定されるため常に可視領域の端に表示される */
