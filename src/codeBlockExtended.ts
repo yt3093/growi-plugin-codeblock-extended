@@ -462,6 +462,7 @@ type DiffLineType = 'added' | 'removed' | 'hunk' | 'context';
 interface LinenumConfig {
   start: number;
   highlights: Set<number>;
+  lang?: string;
 }
 
 interface BlockRefs {
@@ -584,16 +585,10 @@ function makeFailIcon(): SVGSVGElement {
   ]);
 }
 
-function hashLangColor(lang: string): string {
-  let h = 0;
-  for (let i = 0; i < lang.length; i++) h = (h * 31 + lang.charCodeAt(i)) & 0xfffffff;
-  return `hsl(${h % 360}, 60%, 42%)`;
-}
-
 function makeLangIcon(lang: string): SVGSVGElement {
   const def = LANG_ICON_MAP[lang];
   const svg = createSvgEl('svg', {
-    width: '16', height: '16', viewBox: def ? def.vb : '0 0 60 60',
+    width: '16', height: '16', viewBox: def ? def.vb : '0 0 24 24',
     'aria-hidden': 'true', class: LANG_ICON_CLASS,
   }) as SVGSVGElement;
   if (def) {
@@ -611,16 +606,15 @@ function makeLangIcon(lang: string): SVGSVGElement {
       svg.appendChild(elem);
     }
   } else {
-    const abbr = lang.slice(0, 2).toUpperCase();
-    svg.appendChild(createSvgEl('rect', { width: '60', height: '60', rx: '6', fill: hashLangColor(lang) }));
-    const text = createSvgEl('text', {
-      x: '30', y: abbr.length === 1 ? '44' : '43',
-      'text-anchor': 'middle',
-      'font-size': abbr.length === 1 ? '32' : '26',
-      fill: '#fff', 'font-weight': '700', 'font-family': 'monospace, ui-monospace',
-    });
-    text.textContent = abbr;
-    svg.appendChild(text);
+    // generic file icon
+    svg.appendChild(createSvgEl('path', {
+      d: 'M6 2a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6H6z',
+      fill: 'rgba(255,255,255,0.55)', stroke: 'rgba(255,255,255,0.85)', 'stroke-width': '0.5',
+    }));
+    svg.appendChild(createSvgEl('path', {
+      d: 'M14 2v6h6',
+      fill: 'none', stroke: 'rgba(255,255,255,0.85)', 'stroke-width': '0.5',
+    }));
   }
   return svg;
 }
@@ -701,6 +695,8 @@ function parseLinenumSpec(inner: string): LinenumConfig {
     if (key === 'start') {
       const n = parseInt(value, 10);
       if (!isNaN(n) && n >= 1) config.start = n;
+    } else if (key === 'lang') {
+      if (value) config.lang = value.toLowerCase();
     } else if (key === 'hl') {
       for (const part of value.split(',')) {
         const t = part.trim();
@@ -894,7 +890,9 @@ function setupFilenameLabel(pre: HTMLPreElement, code: HTMLElement): void {
 
   const cite = pre.querySelector<HTMLElement>(GROWI_FILENAME_SELECTOR);
   const filename = cite?.textContent?.trim().replace(/\s*\{[^}]*\}\s*$/, '').trim() || null;
-  const lang = pre.hasAttribute(NO_LANG_ATTR) ? null : extractLanguage(code);
+  const specStr = findLinenumSpec(pre, code);
+  const specLang = specStr ? parseLinenumSpec(specStr).lang ?? null : null;
+  const lang = pre.hasAttribute(NO_LANG_ATTR) ? null : (specLang ?? extractLanguage(code));
 
   if (!filename && !lang) return;
 
