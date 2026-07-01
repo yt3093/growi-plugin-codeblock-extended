@@ -30,7 +30,7 @@
 | 行ハイライト | `{hl=行番号[,範囲...]}` で指定行の背景を強調。コード側は `.gpcb-code-wrap` 内の絶対配置 flex column オーバーレイ（`.gpcb-hl-overlay`）、行番号 aside 側は対応 `<span>` に `.gpcb-linenum-hl` クラスを付与 |
 | 差分表示 | `language-diff` ブロックまたは `{diff}` 修飾子付きブロックで diff ガター（`<aside class="gpcb-diff-gutter">`）と背景オーバーレイを生成。追加行=緑・削除行=赤・ハンク行=紫。`language-diff` ブロックは Prism/Shiki のトークン背景色を `background: none !important` でリセット（文字色は残す）。行番号は追加/コンテキスト行にのみ付与（削除行・ハンク行はカウントしない）。`{start=N}` で開始番号指定可能。`data-no-diff` で opt-out |
 | ハイライト横スクロール追従 | オーバーレイは `left: 0; right: 0`（visible 幅固定）。`codeWrap` の scroll イベントで `hlOverlay.style.transform = translateX(scrollLeft)` を更新しビューポート追従させる（layout 計測不要） |
-| 印刷 | `@media print` で `.gpcb-toolbar` / `.gpcb-linenums` / `.gpcb-hl-overlay` を非表示 |
+| 印刷最適化 | `@media print` で toolbar・行番号（`gpcb-linenums`）・diff ガター・hl-overlay を非表示。コードブロックは白背景・黒文字・`border: 1px solid #ccc` に反転し、`break-inside: avoid` でページをまたがないようにする。Shiki / Prism のインラインスタイルを `!important` で上書き。長い行は `white-space: pre-wrap` + `word-break: break-all` で折り返し。ファイル名ラベルは薄いグレー背景・黒文字で表示 |
 
 ### 今後のロードマップ（未実装・ブランチを分けて順次実装）
 
@@ -321,7 +321,7 @@ GROWI 管理画面 `/admin/plugins` で **削除 → 再インストール**。
 20. ラベルテキストをマウスで選択・コピーできる
 21. `<pre data-no-filename>` でラベルが非表示になる（コピーボタンは出る）
 22. `<pre data-no-copy>` でコピーボタンが非表示になる（ラベルは出る）
-23. 印刷プレビューでラベルが非表示になる
+23. 印刷プレビューでファイル名ラベルが薄いグレー背景・黒文字で表示される
 24. ラベルあり・なしでコピーボタンの位置が揃っている（ともにコードエリア上端から 0.4rem 内側）
 25. 行番号がコードブロック左側に薄いグレーで表示される
 26. 行番号の数が実際のコード行数と一致する（末尾改行は除外）
@@ -358,6 +358,9 @@ GROWI 管理画面 `/admin/plugins` で **削除 → 再インストール**。
 55. コピーボタンにホバーすると 0.2s 後に tooltip が表示される（ブラウザ標準より速い）
 56. diff ブロックの tooltip に "Shift+Click: Copy RAW Diff" のヒントが含まれる
 57. コピー後（フィードバック中）もホバーを維持すれば tooltip が表示され続け、マウスを外すと 1.5s かけてゆっくり消える
+58. 印刷プレビューでコードブロックが白背景・黒文字・枠線付きで表示される（Shiki / Prism のインラインスタイルが上書きされる）
+59. 印刷プレビューで長い行が折り返して表示される（横スクロールが発生しない）
+60. 印刷プレビューで diff ガターが非表示になる
 
 ## 会話ガイドライン
 
