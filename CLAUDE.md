@@ -24,8 +24,9 @@
 | deactivate | 全 listener 解除・MutationObserver.disconnect・モンキーパッチ復元・toolbar 削除・付与した `gpcb-enhanced` クラスと `data-gpcb-enhanced` 属性を全削除。`<code>` の中身は完全無変更 |
 | ダークモード | `@media (prefers-color-scheme: dark)` と `html[data-bs-theme="dark"]`（Bootstrap 5.3 GROWI UI トグル）の双方で CSS 変数を上書き |
 | reduced-motion | `prefers-reduced-motion: reduce` 環境ではフラッシュアニメなし |
-| 行番号 | コードブロック左側に `<aside class="gpcb-linenums">` を並置。Prism 内側 div を `display: flex !important` で flex 化し、`<aside>`（flex-shrink: 0）と `.gpcb-code-wrap`（`overflow-x: auto`）を横並び。`<code>` の DOM は不変。`data-no-linenum` で opt-out |
-| コードスクロールコンテナ | `<code>` を `<div class="gpcb-code-wrap">` で包んで `overflow-x: auto` をここに限定。`<aside>` は flex item として外側に置くため横スクロール時に左固定になる（`position: sticky` 不要） |
+| 行番号 | コードブロック左側に `<aside class="gpcb-linenums">` を並置。Prism 内側 div を `display: flex !important` で flex 化し、`<aside>`（flex-shrink: 0）と `.gpcb-code-outer > .gpcb-code-wrap`（`overflow-x: auto`）を横並び。`<code>` の DOM は不変。`data-no-linenum` で opt-out |
+| コードスクロールコンテナ | `<code>` を `<div class="gpcb-code-wrap">` で包んで `overflow-x: auto` をここに限定。さらにその外側を `<div class="gpcb-code-outer">` で包む（overflow fade の重ね合わせのため）。`<aside>` は flex item として外側に置くため横スクロール時に左固定になる（`position: sticky` 不要） |
+| 横オーバーフロー可視化 | コード内容が横幅を超える場合、`gpcb-code-outer` の `::before` / `::after` CSS 疑似要素でフェードグラデーションを表示。未スクロール時は右端のみ、途中スクロール時は両端、末尾到達時は左端のみ表示。`getCodeBg()` で `getComputedStyle` を使い `<pre>` 到達まで DOM を遡って背景色を取得し、`--gpcb-overflow-bg` CSS 変数としてグラデーション色に使用。`ResizeObserver` でリサイズ時にも再評価。`isolation: isolate` により疑似要素の `z-index` が `.gpcb-toolbar` を覆わないよう封じ込め。ホバー時はスクロールバーのサム色を明るくして存在を示す。`data-no-overflow-fade` で opt-out |
 | 開始行番号指定 | コードフェンスに `{start=N}` を付けると行番号を N から開始。`findLinenumSpec` で `<code>` className または `<cite>` テキストから `{...}` を抽出し、`parseLinenumSpec` で解析 |
 | 行ハイライト | `{hl=行番号[,範囲...]}` で指定行の背景を強調。コード側は `.gpcb-code-wrap` 内の絶対配置 flex column オーバーレイ（`.gpcb-hl-overlay`）、行番号 aside 側は対応 `<span>` に `.gpcb-linenum-hl` クラスを付与 |
 | 差分表示 | `language-diff` ブロックまたは `{diff}` 修飾子付きブロックで diff ガター（`<aside class="gpcb-diff-gutter">`）と背景オーバーレイを生成。追加行=緑・削除行=赤・ハンク行=紫。`language-diff` ブロックは Prism/Shiki のトークン背景色を `background: none !important` でリセット（文字色は残す）。行番号は追加/コンテキスト行にのみ付与（削除行・ハンク行はカウントしない）。`{start=N}` で開始番号指定可能。`data-no-diff` で opt-out |
@@ -84,7 +85,7 @@ growi-plugin-codeblock-extended/
 
 - **`enhanceCodeBlock(pre)`**: コーディネータ
   1. `<div class="gpcb-toolbar">` を生成
-  2. `blockRefs.set(pre, { toolbar, filenameLabel: null, lineNums: null, codeWrap: null, hlOverlay: null, hlScrollHandler: null, copyBtn: null, copyHandler: null })` で WeakMap に登録
+  2. `blockRefs.set(pre, { toolbar, filenameLabel: null, lineNums: null, diffGutter: null, codeWrap: null, codeOuter: null, overflowObserver: null, overflowScrollHandler: null, hlOverlay: null, hlScrollHandler: null, copyBtn: null, copyHandler: null })` で WeakMap に登録
   3. `setupCopyButton(toolbar, code, pre)` — `navigator.clipboard.writeText` が利用可能かつ `data-no-copy` がなければボタンを生成
   4. `pre.classList.add('gpcb-enhanced')`、`pre.prepend(toolbar)`
   5. `setupFilenameLabel(pre)` — `data-no-filename` がなく `<cite class="code-highlighted-title">` が存在すれば、その textContent を `<span class="gpcb-filename">` として prepend（DOM 順: [filename, toolbar, 元の中身]）。`data-no-lang` がなければ `makeLangIcon(lang)` で言語アイコンを prepend。`lang` は `findLinenumSpec` + `parseLinenumSpec` の `lang` キーを優先し、なければ `extractLanguage(code)` を使用
@@ -99,7 +100,7 @@ growi-plugin-codeblock-extended/
 
 - **`setCopyBtnState(btn, state)`**: ボタンの子要素を全削除してから `COPY_BTN_STATE_MAP` のアイコン生成関数を呼び、結果を `appendChild`。`aria-label` と `data-gpcb-tooltip` を同値で設定する（`title` 属性は使わない）。`state === 'copy'` かつ `data-gpcb-copy-diff` 属性あり（diff ブロック）の場合は tooltip テキストに Shift+Click ヒントを付加する。`innerHTML` は使わない。
 
-- **`setupLineNumbers(pre, code)`**: ① `code.textContent` から行数算出（末尾改行除外）② `findLinenumSpec` → `parseLinenumSpec` で `{start=N,hl=...}` を解析 ③ `<aside class="gpcb-linenums">` を行数分の `<span>` で生成（highlight 行は `.gpcb-linenum-hl` クラス）④ `<div class="gpcb-code-wrap">` で `<code>` を包む ⑤ highlight 行があれば `<div class="gpcb-hl-overlay">` を `codeWrap.prepend` ⑥ scroll イベントリスナーを codeWrap に登録し `refs.hlScrollHandler` に保持 ⑦ aside を Prism 内側 div に prepend
+- **`setupLineNumbers(pre, code)`**: ① `code.textContent` から行数算出（末尾改行除外）② `findLinenumSpec` → `parseLinenumSpec` で `{start=N,hl=...}` を解析 ③ `<aside class="gpcb-linenums">` を行数分の `<span>` で生成（highlight 行は `.gpcb-linenum-hl` クラス）④ `<div class="gpcb-code-outer">` > `<div class="gpcb-code-wrap">` で `<code>` を包む ⑤ highlight 行があれば `<div class="gpcb-hl-overlay">` を `codeWrap.prepend` ⑥ hlOverlay 用 scroll イベントリスナーを codeWrap に登録し `refs.hlScrollHandler` に保持 ⑦ aside を Prism 内側 div に prepend ⑧ `setupOverflowFade(codeOuter, codeWrap, code, pre)` を呼ぶ
 
 - **`findLinenumSpec(pre, code)`**: `<code>` の className を先に確認（`language-xxx{...}` 形式）。なければ `<cite class="code-highlighted-title">` のテキストを確認（ファイル名あり記法では cite に `file.py{...}` が残る）。`SPEC_RE = /\{([^}]+)\}/` でマッチ。
 
@@ -107,13 +108,13 @@ growi-plugin-codeblock-extended/
 
 - **`isDiffTarget(pre, code)`**: `isDiffBlock(code)`（`language-diff` クラス判定）または `hasDiffModifier(pre, code)`（`{diff}` 修飾子判定）のいずれかが true なら diff ブロックと見なす。`hasDiffModifier` は `findLinenumSpec` でスペック文字列を取得し、カンマ区切りで分割して `'diff'` と完全一致するパートがあるかを確認する。diff ブロックと判定された場合は `setupDiffView` のみを呼び `setupLineNumbers` は呼ばない。このため `{hl=...}` や `{start=...}` を同時に指定しても**黙って無視**される（仕様）。
 
-- **`setupDiffView(pre, code)`**: `setupLineNumbers` と同様の構造で、①行テキストを改行分割 ②各行を `classifyDiffLine`（`@@` → hunk、`+++`/`---` → hunk、`+` → added、`-` → removed、他 → context）で分類 ③`data-no-linenum` がなければ `<aside class="gpcb-linenums">` を生成（added/context 行のみ番号を振る、removed/hunk はカウントしない）④`<aside class="gpcb-diff-gutter">` にガター記号 span を生成 ⑤`<div class="gpcb-hl-overlay">` に行分の div を生成（added/removed/hunk に対応クラス付与）⑥`<code>` を `<div class="gpcb-code-wrap">` で包む ⑦scroll リスナー登録。`data-no-diff` 属性があれば早期 return。`{start=N}` で行番号の開始番号を指定可能。
+- **`setupDiffView(pre, code)`**: `setupLineNumbers` と同様の構造で、①行テキストを改行分割 ②各行を `classifyDiffLine`（`@@` → hunk、`+++`/`---` → hunk、`+` → added、`-` → removed、他 → context）で分類 ③`data-no-linenum` がなければ `<aside class="gpcb-linenums">` を生成（added/context 行のみ番号を振る、removed/hunk はカウントしない）④`<aside class="gpcb-diff-gutter">` にガター記号 span を生成 ⑤`<div class="gpcb-hl-overlay">` に行分の div を生成（added/removed/hunk に対応クラス付与）⑥`<code>` を `<div class="gpcb-code-outer">` > `<div class="gpcb-code-wrap">` で包む ⑦scroll リスナー登録 ⑧`setupOverflowFade(codeOuter, codeWrap, code, pre)` を呼ぶ。`data-no-diff` 属性があれば早期 return。`{start=N}` で行番号の開始番号を指定可能。
 
-- **`cleanupBlock(pre)`**: `blockRefs.get(pre)` から `copyTimerId`（`clearTimeout`）・`copyHandler`（`removeEventListener`）・`hlScrollHandler`（`codeWrap.removeEventListener`）を解除。`codeWrap` の子を全て親に移してから `codeWrap.remove()`（hlOverlay も連れて消える）。`lineNums`・`filenameLabel`・`toolbar` を `.remove()`。`gpcb-enhanced` クラスと `data-gpcb-enhanced` 属性を削除。`<code>` の中身は一切変更しない。`<cite class="code-highlighted-title">` は DOM から削除しない（CSS スコープが外れると自動復帰する）。
+- **`cleanupBlock(pre)`**: `blockRefs.get(pre)` から `copyTimerId`（`clearTimeout`）・`copyHandler`（`removeEventListener`）・`hlScrollHandler`（`codeWrap.removeEventListener`）・`overflowScrollHandler`（`codeWrap.removeEventListener`）を解除。`overflowObserver.disconnect()` で ResizeObserver を破棄。`codeWrap` の子を全て親（`codeOuter`）に移してから `codeWrap.remove()`、続いて `codeOuter` の子を全て親に移してから `codeOuter.remove()`（この 2 段階アンラップで `<code>` が `inner` div に戻る）。`lineNums`・`diffGutter`・`filenameLabel`・`toolbar` を `.remove()`。`gpcb-enhanced` クラスと `data-gpcb-enhanced` 属性を削除。`<code>` の中身は一切変更しない。`<cite class="code-highlighted-title">` は DOM から削除しない（CSS スコープが外れると自動復帰する）。
 
 - **SPA 遷移検知**: `pushState` / `replaceState` にカスタムイベント `'growi-pcb-navigate'` をモンキーパッチ。`popstate` / `hashchange` も購読し、いずれも 2 段 `requestAnimationFrame` で DOM が安定してから `scanAndEnhance()` を実行。
 
-- **MutationObserver**: `document.body` を `childList: true, subtree: true, attributes: true, attributeFilter: ['class']` で監視。追加ノード判定では **`.gpcb-toolbar` / `.gpcb-filename` / `.gpcb-linenums` / `.gpcb-code-wrap` / `.gpcb-hl-overlay` を持つ要素はスキップ**して自己追加による無限ループを防ぐ。Prism が enhance 済み `<pre>` に内側 div を後から挿入・差し替えした場合（`refs.lineNums.isConnected` が false）は scroll リスナーを解除してから `refs.lineNums / codeWrap / hlOverlay / hlScrollHandler` をリセットし `setupLineNumbers` を再実行。`body.class` 変化時（編集モード遷移）は `isHiddenContext()` を判定し、true なら全 enhanced `<pre>` を即 `cleanupBlock`、false なら `scheduleScan()`。
+- **MutationObserver**: `document.body` を `childList: true, subtree: true, attributes: true, attributeFilter: ['class']` で監視。追加ノード判定では **`.gpcb-toolbar` / `.gpcb-filename` / `.gpcb-linenums` / `.gpcb-diff-gutter` / `.gpcb-code-outer` / `.gpcb-code-wrap` / `.gpcb-hl-overlay` を持つ要素はスキップ**して自己追加による無限ループを防ぐ。Prism が enhance 済み `<pre>` に内側 div を後から挿入・差し替えした場合（`refs.lineNums.isConnected` が false）は scroll リスナーを解除し `overflowObserver.disconnect()` を呼んでから `refs.lineNums / diffGutter / codeWrap / codeOuter / overflowObserver / overflowScrollHandler / hlOverlay / hlScrollHandler` をリセットし `setupLineNumbers` / `setupDiffView` を再実行（`setupOverflowFade` も再呼び出しされるため背景色も再取得される）。`body.class` 変化時（編集モード遷移）は `isHiddenContext()` を判定し、true なら全 enhanced `<pre>` を即 `cleanupBlock`、false なら `scheduleScan()`。
 
 - **`isHiddenContext()`**: `/admin` / `/admin/*` パス、`#edit` / `/edit` サフィックス、`body.editing` / `body.grw-editor-mode` / `body.modal-open` クラスのいずれかで true を返す。
 
@@ -132,13 +133,18 @@ growi-plugin-codeblock-extended/
 | opt-out（行番号） | `data-no-linenum` |
 | opt-out（差分表示） | `data-no-diff` |
 | opt-out（言語アイコン） | `data-no-lang` |
+| opt-out（横オーバーフロー可視化） | `data-no-overflow-fade` |
 | 言語アイコンクラス | `gpcb-lang-icon` |
 | ファイル名ラベル属性 | `data-gpcb-filename` |
 | コピーボタン diff マーカー属性 | `data-gpcb-copy-diff` |
 | コピーボタン tooltip 属性 | `data-gpcb-tooltip` |
 | 行番号 aside クラス | `gpcb-linenums` |
 | 行番号ハイライトクラス | `gpcb-linenum-hl` |
+| overflow fade ラッパークラス | `gpcb-code-outer` |
 | コードスクロールコンテナクラス | `gpcb-code-wrap` |
+| overflow fade 左表示クラス | `gpcb-of-left` |
+| overflow fade 右表示クラス | `gpcb-of-right` |
+| overflow fade 背景色変数 | `--gpcb-overflow-bg` |
 | ハイライトオーバーレイクラス | `gpcb-hl-overlay` |
 | ハイライト行クラス | `gpcb-hl-line` / `gpcb-hl-line-hl` |
 | diff ガタークラス | `gpcb-diff-gutter` |
@@ -249,6 +255,14 @@ DOM ノード自体は残すこと（`cite.remove()` などはしない）。`un
 - `.gpcb-hl-overlay` は `position: absolute; top: 0; height: 100%` で code-wrap と同高
 - N 個の `<div class="gpcb-hl-line">` に `flex: 1 1 0` を当てると等分割され、各 div の高さが 1 行分の高さに一致する
 - `getComputedStyle().lineHeight = 'normal'` の解釈がブラウザ依存であることを回避できる
+
+### 15. `isolation: isolate` で overflow fade が toolbar を覆う問題を防ぐ
+
+`gpcb-code-outer` の `::before` / `::after`（疑似要素）には `z-index: 3` を設定している。一方 `.gpcb-toolbar` は `z-index: 1`。両者が同じ `<pre>` のスタッキングコンテキストに参加すると、フェードが toolbar の上に描画されてコピーボタンを視覚的に覆ってしまう（`pointer-events: none` なのでクリックは通るが見た目が崩れる）。
+
+**解決策**: `gpcb-code-outer` に `isolation: isolate` を付与して独立したスタッキングコンテキストを形成する。これにより内部の `z-index: 3` は外部に影響しなくなり、`<pre>` コンテキストでは `gpcb-code-outer` が `z-index: auto`（= 0 扱い）として評価される。`gpcb-toolbar` の `z-index: 1` が常に前面になる。
+
+新たに `position` を持つ要素を `gpcb-code-outer` 内部に追加するときは、`z-index` が `gpcb-code-outer` 内で完結していることを意識すること。
 
 ### 16. オプション指定は `言語:{...}`（コロンあり・1 つの `{...}`）でなければならない
 
