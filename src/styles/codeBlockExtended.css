@@ -328,8 +328,9 @@ pre.gpcb-enhanced:hover .gpcb-code-wrap::-webkit-scrollbar-thumb {
   transition: max-height 0.3s ease;
 }
 
-/* オーバーレイ: 折りたたみ時は position:absolute でグラデーション＋展開ボタン
-                 展開時は [data-expanded] で position:static のフッターに切替 */
+/* オーバーレイ: 常に position:absolute でコード下端に張り付く
+   折りたたみ時: グラデーション＋展開ボタン
+   展開時 [data-expanded]: グラデーションなし＋折りたたみボタン（コード末尾に位置） */
 .gpcb-fold-overlay {
   position: absolute;
   bottom: 0;
@@ -342,20 +343,21 @@ pre.gpcb-enhanced:hover .gpcb-code-wrap::-webkit-scrollbar-thumb {
   justify-content: center;
   padding-bottom: 0.5em;
   z-index: 1;
+  pointer-events: none; /* 背景クリック透過、ボタンのみ受付 */
 }
 
-/* 展開状態: フッターとして flow に戻す */
+/* 展開状態: グラデーション消去、ボタンのみ表示 */
 .gpcb-fold-overlay[data-expanded] {
-  position: static;
   height: auto;
   background: none;
-  padding: 0.3rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.07);
+  padding: 0.4rem;
+  align-items: center;
 }
 
 /* 展開ボタン・フッター折りたたみボタン共通スタイル */
 .gpcb-fold-expand-btn,
 .gpcb-fold-collapse-bottom-btn {
+  pointer-events: auto;
   display: inline-flex;
   align-items: center;
   gap: 4px;

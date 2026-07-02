@@ -1165,7 +1165,7 @@ function setupFold(pre: HTMLPreElement, code: HTMLElement): void {
   refs?.toolbar.prepend(collapseBtn);
 
   const doExpand = () => {
-    // overlay が absolute の間に scrollHeight を計測してアニメーション開始
+    // overlay は absolute のまま scrollHeight を計測してアニメーション開始
     inner.style.maxHeight = `${inner.scrollHeight}px`;
     let cleaned = false;
     const cleanupExpand = () => {
@@ -1173,7 +1173,7 @@ function setupFold(pre: HTMLPreElement, code: HTMLElement): void {
       cleaned = true;
       inner.classList.remove(FOLD_COLLAPSED_CLASS);
       inner.style.removeProperty('max-height');
-      // オーバーレイをフッターモード（position: static）へ切替
+      // 展開完了後にオーバーレイをボタン表示モードへ切替
       overlay.setAttribute('data-expanded', '1');
       expandBtn.style.display = 'none';
       collapseBottomBtn.style.display = '';
@@ -1184,11 +1184,12 @@ function setupFold(pre: HTMLPreElement, code: HTMLElement): void {
   };
 
   const doCollapse = () => {
-    // オーバーレイを absolute モードへ戻してから scrollHeight を計測
     overlay.removeAttribute('data-expanded');
     expandBtn.style.display = '';
     collapseBottomBtn.style.display = 'none';
     collapseBtn.style.display = 'none';
+    // 横スクロール位置をリセット
+    if (refs?.codeWrap) refs.codeWrap.scrollLeft = 0;
     inner.style.maxHeight = `${inner.scrollHeight}px`;
     pre.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     requestAnimationFrame(() => {
