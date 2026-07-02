@@ -1003,9 +1003,6 @@ function setupFilenameLabel(pre: HTMLPreElement, code: HTMLElement): void {
     label.appendChild(countSpan);
   }
 
-  const bg = getCodeBg(code, pre);
-  label.style.background = bg;
-
   pre.prepend(label);
 
   const refs = blockRefs.get(pre);
@@ -1149,8 +1146,6 @@ function setupFold(pre: HTMLPreElement, code: HTMLElement): void {
     countSpan.setAttribute('aria-hidden', 'true');
     countSpan.textContent = `${lineCount} lines`;
     foldLabel.appendChild(countSpan);
-    const bg = getCodeBg(code, pre);
-    foldLabel.style.background = bg;
     pre.prepend(foldLabel);
     if (refs) refs.filenameLabel = foldLabel;
   }
