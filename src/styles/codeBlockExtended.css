@@ -181,7 +181,7 @@ pre.gpcb-enhanced .code-highlighted-title {
   .gpcb-code-outer::before,
   .gpcb-code-outer::after,
   .gpcb-fold-collapsed,
-  .gpcb-fold-overlay > button,
+  .gpcb-fold-footer > button,
   [data-gpcb-fold-btn],
   [data-gpcb-fold-btn]::after {
     transition: none;
@@ -319,50 +319,54 @@ pre.gpcb-enhanced:hover .gpcb-code-wrap::-webkit-scrollbar-thumb {
    折りたたみ (fold)
    ================================================================ */
 
-/* 折りたたみ状態: max-height でクリップ、transition でスムーズに展開 */
+/* 折りたたみ状態: max-height でクリップ、transition でスムーズに展開
+   --gpcb-fold-height は JS で {fold=N} の N に応じてセットされる */
 .gpcb-fold-collapsed {
   position: relative; /* オーバーレイの containing block */
-  max-height: calc(8lh + 3em); /* 8 コード行 + 上下パディング分 */
+  max-height: var(--gpcb-fold-height, calc(8lh + 3em));
   overflow: hidden;
   transition: max-height 0.3s ease;
 }
 
-/* 下端グラデーション + 展開ボタンのコンテナ */
+/* 下端グラデーション（ボタンなし・視覚的なフェードのみ） */
 .gpcb-fold-overlay {
   position: absolute;
   bottom: 0;
   left: 0;
   right: 0;
   height: 5em;
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  padding-bottom: 0.6rem;
   background: linear-gradient(transparent, var(--gpcb-fold-bg, rgb(40, 44, 52)));
-  pointer-events: none; /* グラデーション部分はイベントを透過 */
+  pointer-events: none;
   z-index: 1;
 }
 
-/* 展開ボタン */
-.gpcb-fold-overlay > button {
+/* フッタートグルボタン（常時表示・展開/折りたたみ両方） */
+.gpcb-fold-footer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.3rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.gpcb-fold-footer > button {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 4px 12px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 6px;
-  background: rgba(255, 255, 255, 0.10);
-  color: rgba(255, 255, 255, 0.70);
+  padding: 3px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.55);
   font-size: 0.72rem;
   font-family: var(--bs-font-monospace, ui-monospace, SFMono-Regular, monospace);
   cursor: pointer;
-  pointer-events: auto;
   transition: background-color 0.15s ease, color 0.15s ease;
 }
 
-.gpcb-fold-overlay > button:hover {
-  background: rgba(255, 255, 255, 0.22);
-  color: rgba(255, 255, 255, 0.95);
+.gpcb-fold-footer > button:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: rgba(255, 255, 255, 0.90);
 }
 
 /* 折りたたみボタン (ツールバー内) */
@@ -438,7 +442,8 @@ pre.gpcb-enhanced:hover .gpcb-code-wrap::-webkit-scrollbar-thumb {
     overflow: visible !important;
   }
 
-  .gpcb-fold-overlay {
+  .gpcb-fold-overlay,
+  .gpcb-fold-footer {
     display: none !important;
   }
 
