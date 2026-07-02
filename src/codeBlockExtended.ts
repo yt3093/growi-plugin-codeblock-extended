@@ -1238,13 +1238,23 @@ function setupFold(pre: HTMLPreElement, code: HTMLElement): void {
     // 横スクロール位置をリセット
     if (refs?.codeWrap) refs.codeWrap.scrollLeft = 0;
     inner.style.maxHeight = `${inner.scrollHeight}px`;
-    pre.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     requestAnimationFrame(() => {
       inner.classList.add(FOLD_COLLAPSED_CLASS);
       requestAnimationFrame(() => {
         inner.style.removeProperty('max-height');
       });
     });
+    // アニメーション完了後に pre がビューポート上端より上にある場合のみスクロール
+    let scrollHandled = false;
+    const onCollapseEnd = () => {
+      if (scrollHandled) return;
+      scrollHandled = true;
+      if (pre.getBoundingClientRect().top < 0) {
+        pre.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    };
+    inner.addEventListener('transitionend', onCollapseEnd, { once: true });
+    window.setTimeout(onCollapseEnd, 400);
   };
 
   expandBtn.addEventListener('click', doExpand);
