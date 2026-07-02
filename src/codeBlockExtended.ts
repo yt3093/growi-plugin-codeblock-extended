@@ -1230,6 +1230,7 @@ function setupFold(pre: HTMLPreElement, code: HTMLElement): void {
   };
 
   const doCollapse = () => {
+    const preTopBefore = pre.getBoundingClientRect().top;
     overlay.removeAttribute('data-expanded');
     inner.style.removeProperty('padding-bottom');
     expandBtn.style.display = '';
@@ -1244,17 +1245,18 @@ function setupFold(pre: HTMLPreElement, code: HTMLElement): void {
         inner.style.removeProperty('max-height');
       });
     });
-    // アニメーション完了後に pre がビューポート上端より上にある場合のみスクロール
-    let scrollHandled = false;
-    const onCollapseEnd = () => {
-      if (scrollHandled) return;
-      scrollHandled = true;
-      if (pre.getBoundingClientRect().top < 0) {
-        pre.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    // アニメーション完了後、pre のビューポート位置を折りたたみ前と同じ位置に復元
+    let compensated = false;
+    const compensateScroll = () => {
+      if (compensated) return;
+      compensated = true;
+      const delta = pre.getBoundingClientRect().top - preTopBefore;
+      if (Math.abs(delta) > 0.5) {
+        window.scrollBy({ top: delta, behavior: 'instant' });
       }
     };
-    inner.addEventListener('transitionend', onCollapseEnd, { once: true });
-    window.setTimeout(onCollapseEnd, 400);
+    inner.addEventListener('transitionend', compensateScroll, { once: true });
+    window.setTimeout(compensateScroll, 400);
   };
 
   expandBtn.addEventListener('click', doExpand);
