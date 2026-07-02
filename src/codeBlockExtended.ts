@@ -984,15 +984,38 @@ function setupFilenameLabel(pre: HTMLPreElement, code: HTMLElement): void {
   label.className = FILENAME_CLASS;
   if (filename) label.setAttribute(FILENAME_ATTR, filename);
 
+  const textSpan = document.createElement('span');
+  textSpan.className = 'gpcb-filename-text';
+
   if (lang) {
-    label.appendChild(makeLangIcon(lang));
+    textSpan.appendChild(makeLangIcon(lang));
   }
 
-  label.appendChild(document.createTextNode(filename ?? (LANG_DISPLAY_MAP[lang!] ?? lang!)));
+  textSpan.appendChild(document.createTextNode(filename ?? (LANG_DISPLAY_MAP[lang!] ?? lang!)));
+  label.appendChild(textSpan);
+
+  const lineCount = computeLineCount(code);
+  if (lineCount > 0) {
+    const countSpan = document.createElement('span');
+    countSpan.className = 'gpcb-linecount';
+    countSpan.setAttribute('aria-hidden', 'true');
+    countSpan.textContent = `${lineCount} lines`;
+    label.appendChild(countSpan);
+  }
+
+  const bg = getCodeBg(code, pre);
+  label.style.background = bg;
+
   pre.prepend(label);
 
   const refs = blockRefs.get(pre);
   if (refs) refs.filenameLabel = label;
+}
+
+function computeLineCount(code: HTMLElement): number {
+  const text = code.textContent ?? '';
+  const stripped = text.endsWith('\n') ? text.slice(0, -1) : text;
+  return stripped === '' ? 0 : stripped.split('\n').length;
 }
 
 function setupLineNumbers(pre: HTMLPreElement, code: HTMLElement): void {
@@ -1005,10 +1028,8 @@ function setupLineNumbers(pre: HTMLPreElement, code: HTMLElement): void {
   if (!inner) return;
   if (!inner.contains(code)) return;
 
-  const text = code.textContent ?? '';
-  const stripped = text.endsWith('\n') ? text.slice(0, -1) : text;
-  if (stripped === '') return;
-  const lineCount = stripped.split('\n').length;
+  const lineCount = computeLineCount(code);
+  if (lineCount === 0) return;
 
   const specStr = findLinenumSpec(pre, code);
   const config: LinenumConfig = specStr
@@ -1103,9 +1124,7 @@ function setupFold(pre: HTMLPreElement, code: HTMLElement): void {
   const foldSpec = parseFoldSpec(specStr);
   if (!foldSpec.enabled) return;
 
-  const text = code.textContent ?? '';
-  const stripped = text.endsWith('\n') ? text.slice(0, -1) : text;
-  const lineCount = stripped === '' ? 0 : stripped.split('\n').length;
+  const lineCount = computeLineCount(code);
 
   const visibleLines = foldSpec.visibleLines > 0 ? foldSpec.visibleLines : FOLD_VISIBLE_LINES;
   if (lineCount <= visibleLines) return;
@@ -1117,6 +1136,25 @@ function setupFold(pre: HTMLPreElement, code: HTMLElement): void {
   if (!inner) return;
 
   const refs = blockRefs.get(pre);
+
+  // ラベルがまだない場合は fold 専用の minimal ラベルを作成
+  if (!refs?.filenameLabel && !pre.hasAttribute(NO_FILENAME_ATTR)) {
+    const foldLabel = document.createElement('span');
+    foldLabel.className = FILENAME_CLASS;
+    const textSpan = document.createElement('span');
+    textSpan.className = 'gpcb-filename-text';
+    foldLabel.appendChild(textSpan);
+    const countSpan = document.createElement('span');
+    countSpan.className = 'gpcb-linecount';
+    countSpan.setAttribute('aria-hidden', 'true');
+    countSpan.textContent = `${lineCount} lines`;
+    foldLabel.appendChild(countSpan);
+    const bg = getCodeBg(code, pre);
+    foldLabel.style.background = bg;
+    pre.prepend(foldLabel);
+    if (refs) refs.filenameLabel = foldLabel;
+  }
+
   const foldBg =
     refs?.codeOuter?.style.getPropertyValue('--gpcb-overflow-bg') ||
     getCodeBg(code, pre);
@@ -1128,8 +1166,7 @@ function setupFold(pre: HTMLPreElement, code: HTMLElement): void {
   inner.style.overflowY = 'hidden';
   inner.classList.add(FOLD_COLLAPSED_CLASS);
 
-  // オーバーレイ: 折りたたみ時は position:absolute でグラデーション＋展開ボタン
-  //               展開時は position:static でフッターとして折りたたみボタン
+  // オーバーレイ: 常に position:absolute でコード下端に張り付く
   const overlay = document.createElement('div');
   overlay.className = FOLD_OVERLAY_CLASS;
 
@@ -1154,15 +1191,28 @@ function setupFold(pre: HTMLPreElement, code: HTMLElement): void {
 
   inner.appendChild(overlay);
 
-  // ツールバー折りたたみボタン（展開時のホバーで表示・Option A）
-  const collapseBtn = document.createElement('button');
-  collapseBtn.type = 'button';
-  collapseBtn.setAttribute(FOLD_COLLAPSE_BTN_ATTR, '1');
-  collapseBtn.setAttribute('aria-label', '折りたたむ');
-  collapseBtn.setAttribute('data-gpcb-tooltip', '折りたたむ');
-  collapseBtn.appendChild(makeChevronUpIcon());
-  collapseBtn.style.display = 'none';
-  refs?.toolbar.prepend(collapseBtn);
+  // ツールバーのトグルボタン（常時表示）
+  const toggleBtn = document.createElement('button');
+  toggleBtn.type = 'button';
+  toggleBtn.setAttribute(FOLD_COLLAPSE_BTN_ATTR, '1');
+  toggleBtn.setAttribute('aria-label', '展開');
+  toggleBtn.setAttribute('data-gpcb-tooltip', '展開');
+  toggleBtn.appendChild(makeChevronDownIcon());
+  refs?.toolbar.prepend(toggleBtn);
+
+  const setToggleBtnCollapsed = () => {
+    toggleBtn.setAttribute('aria-label', '展開');
+    toggleBtn.setAttribute('data-gpcb-tooltip', '展開');
+    toggleBtn.innerHTML = '';
+    toggleBtn.appendChild(makeChevronDownIcon());
+  };
+
+  const setToggleBtnExpanded = () => {
+    toggleBtn.setAttribute('aria-label', '折りたたむ');
+    toggleBtn.setAttribute('data-gpcb-tooltip', '折りたたむ');
+    toggleBtn.innerHTML = '';
+    toggleBtn.appendChild(makeChevronUpIcon());
+  };
 
   const doExpand = () => {
     // overlay は absolute のまま scrollHeight を計測してアニメーション開始
@@ -1173,11 +1223,12 @@ function setupFold(pre: HTMLPreElement, code: HTMLElement): void {
       cleaned = true;
       inner.classList.remove(FOLD_COLLAPSED_CLASS);
       inner.style.removeProperty('max-height');
-      // 展開完了後にオーバーレイをボタン表示モードへ切替
+      // 展開完了後に paddingBottom を付与してからオーバーレイをボタン表示モードへ切替
+      inner.style.paddingBottom = '44px';
       overlay.setAttribute('data-expanded', '1');
       expandBtn.style.display = 'none';
       collapseBottomBtn.style.display = '';
-      collapseBtn.style.display = '';
+      setToggleBtnExpanded();
     };
     inner.addEventListener('transitionend', cleanupExpand, { once: true });
     window.setTimeout(cleanupExpand, 400);
@@ -1185,9 +1236,10 @@ function setupFold(pre: HTMLPreElement, code: HTMLElement): void {
 
   const doCollapse = () => {
     overlay.removeAttribute('data-expanded');
+    inner.style.removeProperty('padding-bottom');
     expandBtn.style.display = '';
     collapseBottomBtn.style.display = 'none';
-    collapseBtn.style.display = 'none';
+    setToggleBtnCollapsed();
     // 横スクロール位置をリセット
     if (refs?.codeWrap) refs.codeWrap.scrollLeft = 0;
     inner.style.maxHeight = `${inner.scrollHeight}px`;
@@ -1202,12 +1254,18 @@ function setupFold(pre: HTMLPreElement, code: HTMLElement): void {
 
   expandBtn.addEventListener('click', doExpand);
   collapseBottomBtn.addEventListener('click', doCollapse);
-  collapseBtn.addEventListener('click', doCollapse);
+  toggleBtn.addEventListener('click', () => {
+    if (overlay.hasAttribute('data-expanded')) {
+      doCollapse();
+    } else {
+      doExpand();
+    }
+  });
 
   if (refs) {
     refs.foldInner = inner;
     refs.foldOverlay = overlay;
-    refs.foldCollapseBtn = collapseBtn;
+    refs.foldCollapseBtn = toggleBtn;
     refs.foldCollapseHandler = doCollapse;
   }
 }
@@ -1277,6 +1335,7 @@ function cleanupBlock(pre: HTMLPreElement): void {
       refs.foldInner.style.removeProperty('max-height');
       refs.foldInner.style.removeProperty('overflow-y');
       refs.foldInner.style.removeProperty('position');
+      refs.foldInner.style.removeProperty('padding-bottom');
     }
     refs.foldOverlay?.remove();
     refs.lineNums?.remove();

@@ -41,12 +41,11 @@ pre.gpcb-enhanced:focus-within .gpcb-toolbar {
   pointer-events: auto;
 }
 
-/* ファイル名ラベルがある場合: ツールバーをコードブロック本体の上端に固定
-   コードブロック開始位置 = (6px top-pad + 1.05rem text + 10px bottom-pad) - 12px margin + 0.5rem Prism margin
-                         = 4px + 1.55rem
+/* ファイル名ラベルがある場合: ツールバーをラベルバーの下端に固定
+   ラベルバーの高さ ≈ 5px + 5px padding + 0.75rem * 1.4 line-height ≈ 10px + 1.05rem
    + 0.4rem コードブロック内オフセット */
 pre.gpcb-enhanced:has(> .gpcb-filename) .gpcb-toolbar {
-  top: calc(4px + 1.95rem);
+  top: calc(10px + 1.05rem + 0.4rem);
 }
 
 /* copy button */
@@ -142,27 +141,46 @@ pre.gpcb-enhanced .code-highlighted-title {
   display: none;
 }
 
-/* ファイル名ラベル: コードブロック上部・フロー配置 */
+/* ファイル名ラベル: コードブロック内側の上端を占有するフルワイドバー */
 .gpcb-filename {
-  display: block;
-  width: fit-content;
-  max-width: calc(100% - 3rem); /* コピーボタン幅を考慮 */
-  padding: 6px 12px 10px;
-  margin: 0 0 -12px 0; /* 下 padding 分コードブロックを引き上げ、裏に潜り込ませる */
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 5px 12px;
+  margin: 0;
   font-family: var(--bs-font-monospace, ui-monospace, SFMono-Regular, monospace);
   font-size: 0.75rem;
   line-height: 1.4;
   color: #ffffffe6;
-  background: #323e52;
-  border-radius: 0.3em 0.3em 0 0;
+  /* background は JS で set */
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 0;
   user-select: text;
   pointer-events: auto;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  box-sizing: border-box;
 }
 
-/* 言語アイコン: ファイル名ラベル内に inline 配置 */
+/* ファイル名テキスト部分: 省略表示 */
+.gpcb-filename-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 行数表示: 右端に配置 */
+.gpcb-linecount {
+  flex-shrink: 0;
+  margin-left: 1rem;
+  padding-right: 2px;
+  color: rgba(255, 255, 255, 0.35);
+  font-size: 0.70rem;
+  user-select: none;
+  pointer-events: none;
+}
+
+/* 言語アイコン: ファイル名テキスト内に inline 配置 */
 .gpcb-lang-icon {
   display: inline-block;
   vertical-align: middle;
@@ -486,6 +504,12 @@ pre.gpcb-enhanced:hover .gpcb-code-wrap::-webkit-scrollbar-thumb {
   .gpcb-filename {
     color: #000 !important;
     background: #e8e8e8 !important;
+    border-bottom-color: #ccc !important;
+  }
+
+  /* 行数表示: 印刷時は非表示 */
+  .gpcb-linecount {
+    display: none !important;
   }
 
 }
