@@ -450,7 +450,6 @@ const DIFF_LINENUM_HH_CLASS = 'gpcb-diff-linenum-hh';
 
 const NO_FOLD_ATTR = 'data-no-fold';
 const FOLD_OVERLAY_CLASS = 'gpcb-fold-overlay';
-const FOLD_FOOTER_CLASS = 'gpcb-fold-footer';
 const FOLD_COLLAPSE_BTN_ATTR = 'data-gpcb-fold-btn';
 const FOLD_COLLAPSED_CLASS = 'gpcb-fold-collapsed';
 const FOLD_VISIBLE_LINES = 8;
@@ -492,8 +491,6 @@ interface BlockRefs {
   foldOverlay: HTMLDivElement | null;
   foldCollapseBtn: HTMLButtonElement | null;
   foldCollapseHandler: (() => void) | null;
-  foldFooter: HTMLDivElement | null;
-  foldFooterClickHandler: (() => void) | null;
 }
 
 const blockRefs = new WeakMap<HTMLPreElement, BlockRefs>();
@@ -1124,18 +1121,40 @@ function setupFold(pre: HTMLPreElement, code: HTMLElement): void {
     refs?.codeOuter?.style.getPropertyValue('--gpcb-overflow-bg') ||
     getCodeBg(code, pre);
 
-  // 折りたたみ状態を適用
+  // overlay の containing block として position: relative を常に設定
+  inner.style.position = 'relative';
   inner.style.setProperty('--gpcb-fold-bg', foldBg);
   inner.style.setProperty('--gpcb-fold-height', `calc(${visibleLines}lh + 3em)`);
-  inner.style.overflowY = 'hidden'; // Prism のインラインスタイルを上書きして縦スクロールを防ぐ
+  inner.style.overflowY = 'hidden';
   inner.classList.add(FOLD_COLLAPSED_CLASS);
 
-  // グラデーションオーバーレイ（ボタンなし・視覚的なフェードのみ）
+  // オーバーレイ: 折りたたみ時は position:absolute でグラデーション＋展開ボタン
+  //               展開時は position:static でフッターとして折りたたみボタン
   const overlay = document.createElement('div');
   overlay.className = FOLD_OVERLAY_CLASS;
+
+  // 展開ボタン（折りたたみ状態で表示）
+  const expandBtn = document.createElement('button');
+  expandBtn.type = 'button';
+  expandBtn.className = 'gpcb-fold-expand-btn';
+  expandBtn.appendChild(makeChevronDownIcon());
+  expandBtn.appendChild(document.createTextNode(` ${lineCount} 行を展開`));
+  expandBtn.setAttribute('aria-label', `${lineCount} 行を展開`);
+  overlay.appendChild(expandBtn);
+
+  // フッター折りたたみボタン（展開状態で表示）
+  const collapseBottomBtn = document.createElement('button');
+  collapseBottomBtn.type = 'button';
+  collapseBottomBtn.className = 'gpcb-fold-collapse-bottom-btn';
+  collapseBottomBtn.appendChild(makeChevronUpIcon());
+  collapseBottomBtn.appendChild(document.createTextNode(' 折りたたむ'));
+  collapseBottomBtn.setAttribute('aria-label', '折りたたむ');
+  collapseBottomBtn.style.display = 'none';
+  overlay.appendChild(collapseBottomBtn);
+
   inner.appendChild(overlay);
 
-  // ツールバーの折りたたみボタン（展開中のみ表示）
+  // ツールバー折りたたみボタン（展開時のホバーで表示・Option A）
   const collapseBtn = document.createElement('button');
   collapseBtn.type = 'button';
   collapseBtn.setAttribute(FOLD_COLLAPSE_BTN_ATTR, '1');
@@ -1145,35 +1164,8 @@ function setupFold(pre: HTMLPreElement, code: HTMLElement): void {
   collapseBtn.style.display = 'none';
   refs?.toolbar.prepend(collapseBtn);
 
-  // フッタートグルボタン（常時表示）
-  const footer = document.createElement('div');
-  footer.className = FOLD_FOOTER_CLASS;
-
-  const footerBtn = document.createElement('button');
-  footerBtn.type = 'button';
-
-  const setFooterExpand = () => {
-    while (footerBtn.firstChild) footerBtn.removeChild(footerBtn.firstChild);
-    footerBtn.appendChild(makeChevronDownIcon());
-    footerBtn.appendChild(document.createTextNode(` ${lineCount} 行を展開`));
-    footerBtn.setAttribute('aria-label', `${lineCount} 行を展開`);
-  };
-
-  const setFooterCollapse = () => {
-    while (footerBtn.firstChild) footerBtn.removeChild(footerBtn.firstChild);
-    footerBtn.appendChild(makeChevronUpIcon());
-    footerBtn.appendChild(document.createTextNode(' 折りたたむ'));
-    footerBtn.setAttribute('aria-label', '折りたたむ');
-  };
-
-  setFooterExpand();
-  footer.appendChild(footerBtn);
-  pre.appendChild(footer);
-
   const doExpand = () => {
-    overlay.style.display = 'none';
-    collapseBtn.style.display = '';
-    setFooterCollapse();
+    // overlay が absolute の間に scrollHeight を計測してアニメーション開始
     inner.style.maxHeight = `${inner.scrollHeight}px`;
     let cleaned = false;
     const cleanupExpand = () => {
@@ -1181,16 +1173,23 @@ function setupFold(pre: HTMLPreElement, code: HTMLElement): void {
       cleaned = true;
       inner.classList.remove(FOLD_COLLAPSED_CLASS);
       inner.style.removeProperty('max-height');
+      // オーバーレイをフッターモード（position: static）へ切替
+      overlay.setAttribute('data-expanded', '1');
+      expandBtn.style.display = 'none';
+      collapseBottomBtn.style.display = '';
+      collapseBtn.style.display = '';
     };
     inner.addEventListener('transitionend', cleanupExpand, { once: true });
     window.setTimeout(cleanupExpand, 400);
   };
 
   const doCollapse = () => {
-    inner.style.maxHeight = `${inner.scrollHeight}px`;
-    overlay.style.display = '';
+    // オーバーレイを absolute モードへ戻してから scrollHeight を計測
+    overlay.removeAttribute('data-expanded');
+    expandBtn.style.display = '';
+    collapseBottomBtn.style.display = 'none';
     collapseBtn.style.display = 'none';
-    setFooterExpand();
+    inner.style.maxHeight = `${inner.scrollHeight}px`;
     pre.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     requestAnimationFrame(() => {
       inner.classList.add(FOLD_COLLAPSED_CLASS);
@@ -1200,12 +1199,8 @@ function setupFold(pre: HTMLPreElement, code: HTMLElement): void {
     });
   };
 
-  const footerClickHandler = () => {
-    if (inner.classList.contains(FOLD_COLLAPSED_CLASS)) doExpand();
-    else doCollapse();
-  };
-
-  footerBtn.addEventListener('click', footerClickHandler);
+  expandBtn.addEventListener('click', doExpand);
+  collapseBottomBtn.addEventListener('click', doCollapse);
   collapseBtn.addEventListener('click', doCollapse);
 
   if (refs) {
@@ -1213,8 +1208,6 @@ function setupFold(pre: HTMLPreElement, code: HTMLElement): void {
     refs.foldOverlay = overlay;
     refs.foldCollapseBtn = collapseBtn;
     refs.foldCollapseHandler = doCollapse;
-    refs.foldFooter = footer;
-    refs.foldFooterClickHandler = footerClickHandler;
   }
 }
 
@@ -1232,7 +1225,7 @@ function enhanceCodeBlock(pre: HTMLPreElement): void {
   const toolbar = document.createElement('div');
   toolbar.className = 'gpcb-toolbar';
 
-  blockRefs.set(pre, { toolbar, filenameLabel: null, lineNums: null, diffGutter: null, codeWrap: null, codeOuter: null, overflowObserver: null, overflowScrollHandler: null, hlOverlay: null, hlScrollHandler: null, copyBtn: null, copyHandler: null, foldInner: null, foldOverlay: null, foldCollapseBtn: null, foldCollapseHandler: null, foldFooter: null, foldFooterClickHandler: null });
+  blockRefs.set(pre, { toolbar, filenameLabel: null, lineNums: null, diffGutter: null, codeWrap: null, codeOuter: null, overflowObserver: null, overflowScrollHandler: null, hlOverlay: null, hlScrollHandler: null, copyBtn: null, copyHandler: null, foldInner: null, foldOverlay: null, foldCollapseBtn: null, foldCollapseHandler: null });
 
   setupCopyButton(toolbar, code, pre);
 
@@ -1282,9 +1275,9 @@ function cleanupBlock(pre: HTMLPreElement): void {
       refs.foldInner.style.removeProperty('--gpcb-fold-height');
       refs.foldInner.style.removeProperty('max-height');
       refs.foldInner.style.removeProperty('overflow-y');
+      refs.foldInner.style.removeProperty('position');
     }
     refs.foldOverlay?.remove();
-    refs.foldFooter?.remove();
     refs.lineNums?.remove();
     refs.diffGutter?.remove();
     refs.filenameLabel?.remove();
@@ -1354,8 +1347,7 @@ export function createCodeBlockExtended(): { mount(): void; unmount(): void } {
               el.classList?.contains(CODE_OUTER_CLASS) ||
               el.classList?.contains(CODE_WRAP_CLASS) ||
               el.classList?.contains(HL_OVERLAY_CLASS) ||
-              el.classList?.contains(FOLD_OVERLAY_CLASS) ||
-              el.classList?.contains(FOLD_FOOTER_CLASS)
+              el.classList?.contains(FOLD_OVERLAY_CLASS)
             ) continue;
 
             // GROWI が enhance 済み <pre> に後から <cite class="code-highlighted-title"> を追加するケース
@@ -1394,7 +1386,6 @@ export function createCodeBlockExtended(): { mount(): void; unmount(): void } {
                   refs.overflowObserver.disconnect();
                 }
                 refs.foldCollapseBtn?.remove();
-                refs.foldFooter?.remove();
                 refs.lineNums = null;
                 refs.diffGutter = null;
                 refs.codeWrap = null;
@@ -1407,8 +1398,6 @@ export function createCodeBlockExtended(): { mount(): void; unmount(): void } {
                 refs.foldOverlay = null;
                 refs.foldCollapseBtn = null;
                 refs.foldCollapseHandler = null;
-                refs.foldFooter = null;
-                refs.foldFooterClickHandler = null;
                 const code = parentPre.querySelector<HTMLElement>('code');
                 if (code) {
                   if (isDiffTarget(parentPre, code)) setupDiffView(parentPre, code);
