@@ -28,6 +28,7 @@ pre.gpcb-enhanced {
   right: 0.4rem;
   display: flex;
   align-items: center;
+  gap: 6px;
   z-index: 1;
   opacity: 0;
   pointer-events: none;

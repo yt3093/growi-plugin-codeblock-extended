@@ -1170,8 +1170,8 @@ function setupFold(pre: HTMLPreElement, code: HTMLElement): void {
   expandBtn.type = 'button';
   expandBtn.className = 'gpcb-fold-expand-btn';
   expandBtn.appendChild(makeChevronDownIcon());
-  expandBtn.appendChild(document.createTextNode(` ${lineCount} 行を展開`));
-  expandBtn.setAttribute('aria-label', `${lineCount} 行を展開`);
+  expandBtn.appendChild(document.createTextNode(' Expand'));
+  expandBtn.setAttribute('aria-label', 'Expand');
   overlay.appendChild(expandBtn);
 
   // フッター折りたたみボタン（展開状態で表示）
@@ -1179,8 +1179,8 @@ function setupFold(pre: HTMLPreElement, code: HTMLElement): void {
   collapseBottomBtn.type = 'button';
   collapseBottomBtn.className = 'gpcb-fold-collapse-bottom-btn';
   collapseBottomBtn.appendChild(makeChevronUpIcon());
-  collapseBottomBtn.appendChild(document.createTextNode(' 折りたたむ'));
-  collapseBottomBtn.setAttribute('aria-label', '折りたたむ');
+  collapseBottomBtn.appendChild(document.createTextNode(' Collapse'));
+  collapseBottomBtn.setAttribute('aria-label', 'Collapse');
   collapseBottomBtn.style.display = 'none';
   overlay.appendChild(collapseBottomBtn);
 
@@ -1190,21 +1190,21 @@ function setupFold(pre: HTMLPreElement, code: HTMLElement): void {
   const toggleBtn = document.createElement('button');
   toggleBtn.type = 'button';
   toggleBtn.setAttribute(FOLD_COLLAPSE_BTN_ATTR, '1');
-  toggleBtn.setAttribute('aria-label', '展開');
-  toggleBtn.setAttribute('data-gpcb-tooltip', '展開');
+  toggleBtn.setAttribute('aria-label', 'Expand');
+  toggleBtn.setAttribute('data-gpcb-tooltip', 'Expand');
   toggleBtn.appendChild(makeChevronDownIcon());
   refs?.toolbar.prepend(toggleBtn);
 
   const setToggleBtnCollapsed = () => {
-    toggleBtn.setAttribute('aria-label', '展開');
-    toggleBtn.setAttribute('data-gpcb-tooltip', '展開');
+    toggleBtn.setAttribute('aria-label', 'Expand');
+    toggleBtn.setAttribute('data-gpcb-tooltip', 'Expand');
     toggleBtn.innerHTML = '';
     toggleBtn.appendChild(makeChevronDownIcon());
   };
 
   const setToggleBtnExpanded = () => {
-    toggleBtn.setAttribute('aria-label', '折りたたむ');
-    toggleBtn.setAttribute('data-gpcb-tooltip', '折りたたむ');
+    toggleBtn.setAttribute('aria-label', 'Collapse');
+    toggleBtn.setAttribute('data-gpcb-tooltip', 'Collapse');
     toggleBtn.innerHTML = '';
     toggleBtn.appendChild(makeChevronUpIcon());
   };
