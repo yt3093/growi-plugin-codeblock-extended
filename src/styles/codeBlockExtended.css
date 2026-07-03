@@ -28,6 +28,7 @@ pre.gpcb-enhanced {
   right: 0.4rem;
   display: flex;
   align-items: center;
+  gap: 6px;
   z-index: 1;
   opacity: 0;
   pointer-events: none;
@@ -142,13 +143,13 @@ pre.gpcb-enhanced .code-highlighted-title {
   display: none;
 }
 
-/* ファイル名ラベル: コードブロック上部・フロー配置 */
+/* ファイル名ラベル: コードブロック上部に tab 風で全幅表示し、下端はコードブロックに潜り込む */
 .gpcb-filename {
-  display: block;
-  width: fit-content;
-  max-width: calc(100% - 3rem); /* コピーボタン幅を考慮 */
+  display: flex;
+  align-items: center;
+  width: 100%;
   padding: 6px 12px 10px;
-  margin: 0 0 -12px 0; /* 下 padding 分コードブロックを引き上げ、裏に潜り込ませる */
+  margin: 0 0 -12px 0;
   font-family: var(--bs-font-monospace, ui-monospace, SFMono-Regular, monospace);
   font-size: 0.75rem;
   line-height: 1.4;
@@ -157,12 +158,29 @@ pre.gpcb-enhanced .code-highlighted-title {
   border-radius: 0.3em 0.3em 0 0;
   user-select: text;
   pointer-events: auto;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
-/* 言語アイコン: ファイル名ラベル内に inline 配置 */
+/* ファイル名テキスト部分: 省略表示 */
+.gpcb-filename-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 行数表示: 右端に配置 */
+.gpcb-linecount {
+  flex-shrink: 0;
+  margin-left: 1rem;
+  padding-right: 2px;
+  color: rgba(255, 255, 255, 0.35);
+  font-size: 0.70rem;
+  user-select: none;
+  pointer-events: none;
+}
+
+/* 言語アイコン: ファイル名テキスト内に inline 配置 */
 .gpcb-lang-icon {
   display: inline-block;
   vertical-align: middle;
@@ -179,7 +197,12 @@ pre.gpcb-enhanced .code-highlighted-title {
   [data-gpcb-copy-btn],
   [data-gpcb-copy-btn]::after,
   .gpcb-code-outer::before,
-  .gpcb-code-outer::after {
+  .gpcb-code-outer::after,
+  .gpcb-fold-collapsed,
+  .gpcb-fold-expand-btn,
+  .gpcb-fold-collapse-bottom-btn,
+  [data-gpcb-fold-btn],
+  [data-gpcb-fold-btn]::after {
     transition: none;
   }
 }
@@ -311,6 +334,120 @@ pre.gpcb-enhanced:hover .gpcb-code-wrap::-webkit-scrollbar-thumb {
   color: rgba(255, 235, 100, 0.9);
 }
 
+/* ================================================================
+   折りたたみ (fold)
+   ================================================================ */
+
+/* 折りたたみ状態: max-height でクリップ、transition でスムーズに展開
+   --gpcb-fold-height は JS で {fold=N} の N に応じてセットされる */
+.gpcb-fold-collapsed {
+  max-height: var(--gpcb-fold-height, calc(8lh + 3em));
+  overflow: hidden;
+  transition: max-height 0.3s ease;
+}
+
+/* オーバーレイ: 常に position:absolute でコード下端に張り付く
+   折りたたみ時: グラデーション＋展開ボタン
+   展開時 [data-expanded]: グラデーションなし＋折りたたみボタン（コード末尾に位置） */
+.gpcb-fold-overlay {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 5em;
+  background: linear-gradient(transparent, var(--gpcb-fold-bg, rgb(40, 44, 52)));
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding-bottom: 0.5em;
+  z-index: 1;
+  pointer-events: none; /* 背景クリック透過、ボタンのみ受付 */
+}
+
+/* 展開状態: グラデーション消去、ボタンのみ表示 */
+.gpcb-fold-overlay[data-expanded] {
+  height: auto;
+  background: none;
+  padding: 0.4rem;
+  align-items: center;
+}
+
+/* 展開ボタン・フッター折りたたみボタン共通スタイル */
+.gpcb-fold-expand-btn,
+.gpcb-fold-collapse-bottom-btn {
+  pointer-events: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 0.72rem;
+  font-family: var(--bs-font-monospace, ui-monospace, SFMono-Regular, monospace);
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.gpcb-fold-expand-btn:hover,
+.gpcb-fold-collapse-bottom-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: rgba(255, 255, 255, 0.90);
+}
+
+/* 折りたたみボタン (ツールバー内) */
+[data-gpcb-fold-btn] {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 5px;
+  width: 30px;
+  height: 30px;
+  border: none;
+  border-radius: 6px;
+  background-color: var(--gpcb-btn-bg);
+  color: var(--gpcb-btn-color);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+[data-gpcb-fold-btn]:hover {
+  background-color: var(--gpcb-btn-bg-hover);
+  color: var(--gpcb-btn-color-hover);
+}
+
+[data-gpcb-fold-btn]:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.4);
+  outline-offset: 2px;
+}
+
+[data-gpcb-fold-btn]::after {
+  content: attr(data-gpcb-tooltip);
+  position: absolute;
+  top: calc(100% + 5px);
+  right: 0;
+  white-space: nowrap;
+  font-family: var(--bs-font-monospace, ui-monospace, SFMono-Regular, monospace);
+  font-size: 0.68rem;
+  line-height: 1;
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: rgba(82, 92, 108, 0.95);
+  color: rgba(255, 255, 255, 0.92);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 1.5s ease;
+  z-index: 10;
+}
+
+[data-gpcb-fold-btn]:hover::after {
+  opacity: 1;
+  transition: opacity 0.1s ease 0.2s;
+}
+
 @media print {
   /* UI ボタン・行番号・ガター・ハイライトオーバーレイを非表示 */
   .gpcb-toolbar,
@@ -323,6 +460,16 @@ pre.gpcb-enhanced:hover .gpcb-code-wrap::-webkit-scrollbar-thumb {
   /* 印刷時はフェードオーバーレイを非表示 */
   .gpcb-code-outer::before,
   .gpcb-code-outer::after {
+    display: none !important;
+  }
+
+  /* 印刷時は fold を解除してコード全体を出力 */
+  .gpcb-fold-collapsed {
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  .gpcb-fold-overlay {
     display: none !important;
   }
 
@@ -357,6 +504,12 @@ pre.gpcb-enhanced:hover .gpcb-code-wrap::-webkit-scrollbar-thumb {
   .gpcb-filename {
     color: #000 !important;
     background: #e8e8e8 !important;
+    border-bottom-color: #ccc !important;
+  }
+
+  /* 行数表示: 印刷時は非表示 */
+  .gpcb-linecount {
+    display: none !important;
   }
 
 }

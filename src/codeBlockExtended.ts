@@ -448,6 +448,12 @@ const DIFF_LINENUM_ADD_CLASS = 'gpcb-diff-linenum-add';
 const DIFF_LINENUM_RM_CLASS = 'gpcb-diff-linenum-rm';
 const DIFF_LINENUM_HH_CLASS = 'gpcb-diff-linenum-hh';
 
+const NO_FOLD_ATTR = 'data-no-fold';
+const FOLD_OVERLAY_CLASS = 'gpcb-fold-overlay';
+const FOLD_COLLAPSE_BTN_ATTR = 'data-gpcb-fold-btn';
+const FOLD_COLLAPSED_CLASS = 'gpcb-fold-collapsed';
+const FOLD_VISIBLE_LINES = 8;
+
 // GROWI のナビバー要素を検索するセレクタ候補（上から順に試す）
 const NAVBAR_SELECTORS = [
   '#grw-contextual-sub-nav',
@@ -481,6 +487,10 @@ interface BlockRefs {
   copyBtn: HTMLButtonElement | null;
   copyHandler: ((e: MouseEvent) => void) | null;
   copyTimerId?: number;
+  foldInner: HTMLDivElement | null;
+  foldOverlay: HTMLDivElement | null;
+  foldCollapseBtn: HTMLButtonElement | null;
+  foldCollapseHandler: (() => void) | null;
 }
 
 const blockRefs = new WeakMap<HTMLPreElement, BlockRefs>();
@@ -661,6 +671,18 @@ function makeLangIcon(lang: string): SVGSVGElement {
   return svg;
 }
 
+function makeChevronDownIcon(): SVGSVGElement {
+  return buildSvg([
+    { tag: 'polyline', attrs: { points: '6 9 12 15 18 9' } },
+  ]);
+}
+
+function makeChevronUpIcon(): SVGSVGElement {
+  return buildSvg([
+    { tag: 'polyline', attrs: { points: '18 15 12 9 6 15' } },
+  ]);
+}
+
 const COPY_BTN_STATE_MAP: Record<CopyBtnState, { icon: () => SVGSVGElement; label: string; className: string | null }> = {
   'copy': {
     icon: makeCopyIcon,
@@ -773,6 +795,21 @@ function findLinenumSpec(pre: HTMLPreElement, code: HTMLElement): string | null 
     if (match) return match[1];
   }
   return null;
+}
+
+function parseFoldSpec(inner: string): { enabled: boolean; visibleLines: number } {
+  for (const part of inner.split(',')) {
+    const trimmed = part.trim();
+    if (trimmed.toLowerCase() === 'fold') {
+      return { enabled: true, visibleLines: 0 }; // 0 = use default FOLD_VISIBLE_LINES
+    }
+    const m = trimmed.match(/^fold\s*=\s*(\d+)$/i);
+    if (m) {
+      const n = parseInt(m[1], 10);
+      return { enabled: true, visibleLines: isNaN(n) ? 0 : n };
+    }
+  }
+  return { enabled: false, visibleLines: 0 };
 }
 
 // --- diff helpers ---
@@ -947,15 +984,35 @@ function setupFilenameLabel(pre: HTMLPreElement, code: HTMLElement): void {
   label.className = FILENAME_CLASS;
   if (filename) label.setAttribute(FILENAME_ATTR, filename);
 
+  const textSpan = document.createElement('span');
+  textSpan.className = 'gpcb-filename-text';
+
   if (lang) {
-    label.appendChild(makeLangIcon(lang));
+    textSpan.appendChild(makeLangIcon(lang));
   }
 
-  label.appendChild(document.createTextNode(filename ?? (LANG_DISPLAY_MAP[lang!] ?? lang!)));
+  textSpan.appendChild(document.createTextNode(filename ?? (LANG_DISPLAY_MAP[lang!] ?? lang!)));
+  label.appendChild(textSpan);
+
+  const lineCount = computeLineCount(code);
+  if (lineCount > 0) {
+    const countSpan = document.createElement('span');
+    countSpan.className = 'gpcb-linecount';
+    countSpan.setAttribute('aria-hidden', 'true');
+    countSpan.textContent = `${lineCount} lines`;
+    label.appendChild(countSpan);
+  }
+
   pre.prepend(label);
 
   const refs = blockRefs.get(pre);
   if (refs) refs.filenameLabel = label;
+}
+
+function computeLineCount(code: HTMLElement): number {
+  const text = code.textContent ?? '';
+  const stripped = text.endsWith('\n') ? text.slice(0, -1) : text;
+  return stripped === '' ? 0 : stripped.split('\n').length;
 }
 
 function setupLineNumbers(pre: HTMLPreElement, code: HTMLElement): void {
@@ -968,10 +1025,8 @@ function setupLineNumbers(pre: HTMLPreElement, code: HTMLElement): void {
   if (!inner) return;
   if (!inner.contains(code)) return;
 
-  const text = code.textContent ?? '';
-  const stripped = text.endsWith('\n') ? text.slice(0, -1) : text;
-  if (stripped === '') return;
-  const lineCount = stripped.split('\n').length;
+  const lineCount = computeLineCount(code);
+  if (lineCount === 0) return;
 
   const specStr = findLinenumSpec(pre, code);
   const config: LinenumConfig = specStr
@@ -1057,6 +1112,169 @@ function setupCopyButton(toolbar: HTMLDivElement, code: HTMLElement, pre: HTMLPr
   }
 }
 
+function setupFold(pre: HTMLPreElement, code: HTMLElement): void {
+  if (pre.hasAttribute(NO_FOLD_ATTR)) return;
+
+  const specStr = findLinenumSpec(pre, code);
+  if (!specStr) return;
+
+  const foldSpec = parseFoldSpec(specStr);
+  if (!foldSpec.enabled) return;
+
+  const lineCount = computeLineCount(code);
+
+  const visibleLines = foldSpec.visibleLines > 0 ? foldSpec.visibleLines : FOLD_VISIBLE_LINES;
+  if (lineCount <= visibleLines) return;
+
+  const inner = Array.from(pre.children).find(
+    (el): el is HTMLDivElement =>
+      el.tagName === 'DIV' && !el.classList.contains('gpcb-toolbar'),
+  );
+  if (!inner) return;
+
+  const refs = blockRefs.get(pre);
+
+  // ラベルがまだない場合は fold 専用の minimal ラベルを作成
+  if (!refs?.filenameLabel && !pre.hasAttribute(NO_FILENAME_ATTR)) {
+    const foldLabel = document.createElement('span');
+    foldLabel.className = FILENAME_CLASS;
+    const textSpan = document.createElement('span');
+    textSpan.className = 'gpcb-filename-text';
+    foldLabel.appendChild(textSpan);
+    const countSpan = document.createElement('span');
+    countSpan.className = 'gpcb-linecount';
+    countSpan.setAttribute('aria-hidden', 'true');
+    countSpan.textContent = `${lineCount} lines`;
+    foldLabel.appendChild(countSpan);
+    pre.prepend(foldLabel);
+    if (refs) refs.filenameLabel = foldLabel;
+  }
+
+  const foldBg =
+    refs?.codeOuter?.style.getPropertyValue('--gpcb-overflow-bg') ||
+    getCodeBg(code, pre);
+
+  // overlay の containing block として position: relative を常に設定
+  inner.style.position = 'relative';
+  inner.style.setProperty('--gpcb-fold-bg', foldBg);
+  inner.style.setProperty('--gpcb-fold-height', `calc(${visibleLines}lh + 3em)`);
+  inner.style.overflowY = 'hidden';
+  inner.classList.add(FOLD_COLLAPSED_CLASS);
+
+  // オーバーレイ: 常に position:absolute でコード下端に張り付く
+  const overlay = document.createElement('div');
+  overlay.className = FOLD_OVERLAY_CLASS;
+
+  // 展開ボタン（折りたたみ状態で表示）
+  const expandBtn = document.createElement('button');
+  expandBtn.type = 'button';
+  expandBtn.className = 'gpcb-fold-expand-btn';
+  expandBtn.appendChild(makeChevronDownIcon());
+  expandBtn.appendChild(document.createTextNode(' Expand'));
+  expandBtn.setAttribute('aria-label', 'Expand');
+  overlay.appendChild(expandBtn);
+
+  // フッター折りたたみボタン（展開状態で表示）
+  const collapseBottomBtn = document.createElement('button');
+  collapseBottomBtn.type = 'button';
+  collapseBottomBtn.className = 'gpcb-fold-collapse-bottom-btn';
+  collapseBottomBtn.appendChild(makeChevronUpIcon());
+  collapseBottomBtn.appendChild(document.createTextNode(' Collapse'));
+  collapseBottomBtn.setAttribute('aria-label', 'Collapse');
+  collapseBottomBtn.style.display = 'none';
+  overlay.appendChild(collapseBottomBtn);
+
+  inner.appendChild(overlay);
+
+  // ツールバーのトグルボタン（常時表示）
+  const toggleBtn = document.createElement('button');
+  toggleBtn.type = 'button';
+  toggleBtn.setAttribute(FOLD_COLLAPSE_BTN_ATTR, '1');
+  toggleBtn.setAttribute('aria-label', 'Expand');
+  toggleBtn.setAttribute('data-gpcb-tooltip', 'Expand');
+  toggleBtn.appendChild(makeChevronDownIcon());
+  refs?.toolbar.prepend(toggleBtn);
+
+  const setToggleBtnCollapsed = () => {
+    toggleBtn.setAttribute('aria-label', 'Expand');
+    toggleBtn.setAttribute('data-gpcb-tooltip', 'Expand');
+    toggleBtn.innerHTML = '';
+    toggleBtn.appendChild(makeChevronDownIcon());
+  };
+
+  const setToggleBtnExpanded = () => {
+    toggleBtn.setAttribute('aria-label', 'Collapse');
+    toggleBtn.setAttribute('data-gpcb-tooltip', 'Collapse');
+    toggleBtn.innerHTML = '';
+    toggleBtn.appendChild(makeChevronUpIcon());
+  };
+
+  // アニメーション世代カウンタ: doExpand/doCollapse が交互に呼ばれたとき
+  // 古い世代のコールバック（cleanupExpand / compensateScroll）を無効化する
+  let animGen = 0;
+
+  const doExpand = () => {
+    const gen = ++animGen;
+    inner.style.maxHeight = `${inner.scrollHeight}px`;
+    const cleanupExpand = () => {
+      if (gen !== animGen) return;
+      inner.classList.remove(FOLD_COLLAPSED_CLASS);
+      inner.style.removeProperty('max-height');
+      inner.style.paddingBottom = '44px';
+      overlay.setAttribute('data-expanded', '1');
+      expandBtn.style.display = 'none';
+      collapseBottomBtn.style.display = '';
+      setToggleBtnExpanded();
+    };
+    inner.addEventListener('transitionend', cleanupExpand, { once: true });
+    window.setTimeout(cleanupExpand, 400);
+  };
+
+  const doCollapse = () => {
+    const gen = ++animGen;
+    const preTopBefore = pre.getBoundingClientRect().top;
+    overlay.removeAttribute('data-expanded');
+    inner.style.removeProperty('padding-bottom');
+    expandBtn.style.display = '';
+    collapseBottomBtn.style.display = 'none';
+    setToggleBtnCollapsed();
+    if (refs?.codeWrap) refs.codeWrap.scrollLeft = 0;
+    inner.style.maxHeight = `${inner.scrollHeight}px`;
+    requestAnimationFrame(() => {
+      inner.classList.add(FOLD_COLLAPSED_CLASS);
+      requestAnimationFrame(() => {
+        inner.style.removeProperty('max-height');
+      });
+    });
+    const compensateScroll = () => {
+      if (gen !== animGen) return;
+      const delta = pre.getBoundingClientRect().top - preTopBefore;
+      if (Math.abs(delta) > 0.5) {
+        window.scrollBy({ top: delta, behavior: 'instant' });
+      }
+    };
+    inner.addEventListener('transitionend', compensateScroll, { once: true });
+    window.setTimeout(compensateScroll, 400);
+  };
+
+  expandBtn.addEventListener('click', doExpand);
+  collapseBottomBtn.addEventListener('click', doCollapse);
+  toggleBtn.addEventListener('click', () => {
+    if (overlay.hasAttribute('data-expanded')) {
+      doCollapse();
+    } else {
+      doExpand();
+    }
+  });
+
+  if (refs) {
+    refs.foldInner = inner;
+    refs.foldOverlay = overlay;
+    refs.foldCollapseBtn = toggleBtn;
+    refs.foldCollapseHandler = doCollapse;
+  }
+}
+
 function isEligible(pre: HTMLPreElement): boolean {
   if (pre.hasAttribute(ENHANCED_ATTR)) return false;
   if (!pre.querySelector('code')) return false;
@@ -1071,7 +1289,7 @@ function enhanceCodeBlock(pre: HTMLPreElement): void {
   const toolbar = document.createElement('div');
   toolbar.className = 'gpcb-toolbar';
 
-  blockRefs.set(pre, { toolbar, filenameLabel: null, lineNums: null, diffGutter: null, codeWrap: null, codeOuter: null, overflowObserver: null, overflowScrollHandler: null, hlOverlay: null, hlScrollHandler: null, copyBtn: null, copyHandler: null });
+  blockRefs.set(pre, { toolbar, filenameLabel: null, lineNums: null, diffGutter: null, codeWrap: null, codeOuter: null, overflowObserver: null, overflowScrollHandler: null, hlOverlay: null, hlScrollHandler: null, copyBtn: null, copyHandler: null, foldInner: null, foldOverlay: null, foldCollapseBtn: null, foldCollapseHandler: null });
 
   setupCopyButton(toolbar, code, pre);
 
@@ -1083,6 +1301,7 @@ function enhanceCodeBlock(pre: HTMLPreElement): void {
   } else {
     setupLineNumbers(pre, code);
   }
+  setupFold(pre, code);
   pre.setAttribute(ENHANCED_ATTR, '1');
 }
 
@@ -1114,6 +1333,16 @@ function cleanupBlock(pre: HTMLPreElement): void {
       }
       refs.codeOuter.remove();
     }
+    if (refs.foldInner) {
+      refs.foldInner.classList.remove(FOLD_COLLAPSED_CLASS);
+      refs.foldInner.style.removeProperty('--gpcb-fold-bg');
+      refs.foldInner.style.removeProperty('--gpcb-fold-height');
+      refs.foldInner.style.removeProperty('max-height');
+      refs.foldInner.style.removeProperty('overflow-y');
+      refs.foldInner.style.removeProperty('position');
+      refs.foldInner.style.removeProperty('padding-bottom');
+    }
+    refs.foldOverlay?.remove();
     refs.lineNums?.remove();
     refs.diffGutter?.remove();
     refs.filenameLabel?.remove();
@@ -1182,7 +1411,8 @@ export function createCodeBlockExtended(): { mount(): void; unmount(): void } {
               el.classList?.contains(DIFF_GUTTER_CLASS) ||
               el.classList?.contains(CODE_OUTER_CLASS) ||
               el.classList?.contains(CODE_WRAP_CLASS) ||
-              el.classList?.contains(HL_OVERLAY_CLASS)
+              el.classList?.contains(HL_OVERLAY_CLASS) ||
+              el.classList?.contains(FOLD_OVERLAY_CLASS)
             ) continue;
 
             // GROWI が enhance 済み <pre> に後から <cite class="code-highlighted-title"> を追加するケース
@@ -1220,6 +1450,7 @@ export function createCodeBlockExtended(): { mount(): void; unmount(): void } {
                 if (refs.overflowObserver) {
                   refs.overflowObserver.disconnect();
                 }
+                refs.foldCollapseBtn?.remove();
                 refs.lineNums = null;
                 refs.diffGutter = null;
                 refs.codeWrap = null;
@@ -1228,10 +1459,15 @@ export function createCodeBlockExtended(): { mount(): void; unmount(): void } {
                 refs.overflowScrollHandler = null;
                 refs.hlOverlay = null;
                 refs.hlScrollHandler = null;
+                refs.foldInner = null;
+                refs.foldOverlay = null;
+                refs.foldCollapseBtn = null;
+                refs.foldCollapseHandler = null;
                 const code = parentPre.querySelector<HTMLElement>('code');
                 if (code) {
                   if (isDiffTarget(parentPre, code)) setupDiffView(parentPre, code);
                   else setupLineNumbers(parentPre, code);
+                  setupFold(parentPre, code);
                 }
               }
               continue;
