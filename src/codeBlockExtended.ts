@@ -1209,16 +1209,17 @@ function setupFold(pre: HTMLPreElement, code: HTMLElement): void {
     toggleBtn.appendChild(makeChevronUpIcon());
   };
 
+  // アニメーション世代カウンタ: doExpand/doCollapse が交互に呼ばれたとき
+  // 古い世代のコールバック（cleanupExpand / compensateScroll）を無効化する
+  let animGen = 0;
+
   const doExpand = () => {
-    // overlay は absolute のまま scrollHeight を計測してアニメーション開始
+    const gen = ++animGen;
     inner.style.maxHeight = `${inner.scrollHeight}px`;
-    let cleaned = false;
     const cleanupExpand = () => {
-      if (cleaned) return;
-      cleaned = true;
+      if (gen !== animGen) return;
       inner.classList.remove(FOLD_COLLAPSED_CLASS);
       inner.style.removeProperty('max-height');
-      // 展開完了後に paddingBottom を付与してからオーバーレイをボタン表示モードへ切替
       inner.style.paddingBottom = '44px';
       overlay.setAttribute('data-expanded', '1');
       expandBtn.style.display = 'none';
@@ -1230,13 +1231,13 @@ function setupFold(pre: HTMLPreElement, code: HTMLElement): void {
   };
 
   const doCollapse = () => {
+    const gen = ++animGen;
     const preTopBefore = pre.getBoundingClientRect().top;
     overlay.removeAttribute('data-expanded');
     inner.style.removeProperty('padding-bottom');
     expandBtn.style.display = '';
     collapseBottomBtn.style.display = 'none';
     setToggleBtnCollapsed();
-    // 横スクロール位置をリセット
     if (refs?.codeWrap) refs.codeWrap.scrollLeft = 0;
     inner.style.maxHeight = `${inner.scrollHeight}px`;
     requestAnimationFrame(() => {
@@ -1245,11 +1246,8 @@ function setupFold(pre: HTMLPreElement, code: HTMLElement): void {
         inner.style.removeProperty('max-height');
       });
     });
-    // アニメーション完了後、pre のビューポート位置を折りたたみ前と同じ位置に復元
-    let compensated = false;
     const compensateScroll = () => {
-      if (compensated) return;
-      compensated = true;
+      if (gen !== animGen) return;
       const delta = pre.getBoundingClientRect().top - preTopBefore;
       if (Math.abs(delta) > 0.5) {
         window.scrollBy({ top: delta, behavior: 'instant' });
