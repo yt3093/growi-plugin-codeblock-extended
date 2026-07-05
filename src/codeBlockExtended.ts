@@ -1,4 +1,5 @@
 import './styles/codeBlockExtended.css';
+import type { SvgElDef, LangIconDef, CopyBtnState, DiffLineType, BlockRefs, ParsedSpec } from './types';
 
 const ENHANCED_ATTR = 'data-gpcb-enhanced';
 const NO_COPY_ATTR = 'data-no-copy';
@@ -73,9 +74,6 @@ const LANG_DISPLAY_MAP: Record<string, string> = {
   latex: 'LaTeX', tex: 'LaTeX',
   vim: 'Vim', viml: 'Vim',
 };
-type SvgElDef = { tag: string; attrs: Record<string, string>; text?: string };
-type LangIconDef = { vb: string; bg?: string; els: SvgElDef[] };
-
 // devicon-based language icons (viewBox 0 0 128 128 unless noted)
 const _JS: LangIconDef = { vb: '0 0 128 128', els: [
   { tag: 'path', attrs: { d: 'M1.408 1.408h125.184v125.185H1.408z', fill: '#F0DB4F' } },
@@ -454,54 +452,7 @@ const FOLD_COLLAPSE_BTN_ATTR = 'data-gpcb-fold-btn';
 const FOLD_COLLAPSED_CLASS = 'gpcb-fold-collapsed';
 const FOLD_VISIBLE_LINES = 8;
 
-// GROWI のナビバー要素を検索するセレクタ候補（上から順に試す）
-const NAVBAR_SELECTORS = [
-  '#grw-contextual-sub-nav',
-  '[data-testid="grw-contextual-sub-nav"]',
-  '.grw-app-header',
-  '.grw-navigation-header',
-  'nav.navbar.fixed-top',
-  'nav.navbar.sticky-top',
-];
-
-type CopyBtnState = 'copy' | 'ok' | 'ok-raw' | 'fail';
-type DiffLineType = 'added' | 'removed' | 'hunk' | 'context';
-
-interface LinenumConfig {
-  start: number;
-  highlights: Set<number>;
-  lang?: string;
-}
-
-interface BlockRefs {
-  toolbar: HTMLDivElement;
-  filenameLabel: HTMLSpanElement | null;
-  lineNums: HTMLElement | null;
-  diffGutter: HTMLElement | null;
-  codeWrap: HTMLDivElement | null;
-  codeOuter: HTMLDivElement | null;
-  overflowObserver: ResizeObserver | null;
-  overflowScrollHandler: (() => void) | null;
-  hlOverlay: HTMLDivElement | null;
-  hlScrollHandler: (() => void) | null;
-  copyBtn: HTMLButtonElement | null;
-  copyHandler: ((e: MouseEvent) => void) | null;
-  copyTimerId?: number;
-  foldInner: HTMLDivElement | null;
-  foldOverlay: HTMLDivElement | null;
-  foldCollapseBtn: HTMLButtonElement | null;
-  foldCollapseHandler: (() => void) | null;
-}
-
 const blockRefs = new WeakMap<HTMLPreElement, BlockRefs>();
-
-function findNavbarEl(): HTMLElement | null {
-  for (const selector of NAVBAR_SELECTORS) {
-    const el = document.querySelector<HTMLElement>(selector);
-    if (el && el.offsetHeight > 0) return el;
-  }
-  return null;
-}
 
 function isHiddenContext(): boolean {
   const path = location.pathname;
@@ -518,6 +469,45 @@ function isHiddenContext(): boolean {
 
 function isInEditorDOM(pre: HTMLPreElement): boolean {
   return !!pre.closest('.CodeMirror, .cm-editor, [contenteditable="true"]');
+}
+
+function findInnerDiv(pre: HTMLPreElement): HTMLDivElement | null {
+  return Array.from(pre.children).find(
+    (el): el is HTMLDivElement =>
+      el.tagName === 'DIV' && !el.classList.contains('gpcb-toolbar'),
+  ) ?? null;
+}
+
+function wrapCodeInScrollContainer(code: HTMLElement): { codeOuter: HTMLDivElement; codeWrap: HTMLDivElement } {
+  const codeOuter = document.createElement('div');
+  codeOuter.className = CODE_OUTER_CLASS;
+  const codeWrap = document.createElement('div');
+  codeWrap.className = CODE_WRAP_CLASS;
+  code.parentNode!.insertBefore(codeOuter, code);
+  codeOuter.appendChild(codeWrap);
+  codeWrap.appendChild(code);
+  return { codeOuter, codeWrap };
+}
+
+function createBlockRefs(toolbar: HTMLDivElement): BlockRefs {
+  return {
+    toolbar,
+    filenameLabel: null,
+    lineNums: null,
+    diffGutter: null,
+    codeWrap: null,
+    codeOuter: null,
+    overflowObserver: null,
+    overflowScrollHandler: null,
+    hlOverlay: null,
+    hlScrollHandler: null,
+    copyBtn: null,
+    copyHandler: null,
+    foldInner: null,
+    foldOverlay: null,
+    foldCollapseBtn: null,
+    foldCollapseHandler: null,
+  };
 }
 
 // --- overflow fade ---
@@ -745,22 +735,33 @@ function handleCopyClick(e: MouseEvent, code: HTMLElement, btn: HTMLButtonElemen
   );
 }
 
-// --- linenum spec parser ---
+// --- spec parser ---
 
-function parseLinenumSpec(inner: string): LinenumConfig {
-  const config: LinenumConfig = { start: 1, highlights: new Set() };
-  // ルックアヘッドで「次の key= が来るまで」を value として貪欲マッチ。
-  // これにより hl=3,5-7 の内部カンマを誤分割しない。
-  const re = /(\w+)\s*=\s*([^=]*?)(?=,\s*\w+\s*=|$)/g;
+// ルックアヘッドで「次の key= が来るまで」を value として貪欲マッチ。
+// これにより hl=3,5-7 の内部カンマを誤分割しない。
+const KEYVAL_RE = /(\w+)\s*=\s*([^=]*?)(?=,\s*\w+\s*=|$)/g;
+
+function parseSpec(inner: string): ParsedSpec {
+  const result: ParsedSpec = { start: 1, highlights: new Set(), diff: false, fold: false, foldLines: 0 };
+
+  for (const part of inner.split(',')) {
+    const t = part.trim().toLowerCase();
+    if (t === 'diff') { result.diff = true; continue; }
+    if (t === 'fold') { result.fold = true; continue; }
+    const fm = t.match(/^fold\s*=\s*(\d+)$/);
+    if (fm) { result.fold = true; result.foldLines = parseInt(fm[1], 10) || 0; continue; }
+  }
+
+  KEYVAL_RE.lastIndex = 0;
   let m: RegExpExecArray | null;
-  while ((m = re.exec(inner)) !== null) {
-    const key = m[1].trim();
+  while ((m = KEYVAL_RE.exec(inner)) !== null) {
+    const key = m[1].trim().toLowerCase();
     const value = m[2].trim();
     if (key === 'start') {
       const n = parseInt(value, 10);
-      if (!isNaN(n) && n >= 1) config.start = n;
+      if (!isNaN(n) && n >= 1) result.start = n;
     } else if (key === 'lang') {
-      if (value) config.lang = value.toLowerCase();
+      if (value) result.lang = value.toLowerCase();
     } else if (key === 'hl') {
       for (const part of value.split(',')) {
         const t = part.trim();
@@ -769,15 +770,16 @@ function parseLinenumSpec(inner: string): LinenumConfig {
           const from = parseInt(range[1], 10);
           const to = parseInt(range[2], 10);
           if (!isNaN(from) && !isNaN(to) && from <= to) {
-            for (let i = from; i <= to; i++) config.highlights.add(i);
+            for (let i = from; i <= to; i++) result.highlights.add(i);
           }
         } else if (/^\d+$/.test(t)) {
-          config.highlights.add(parseInt(t, 10));
+          result.highlights.add(parseInt(t, 10));
         }
       }
     }
   }
-  return config;
+
+  return result;
 }
 
 function findLinenumSpec(pre: HTMLPreElement, code: HTMLElement): string | null {
@@ -797,36 +799,12 @@ function findLinenumSpec(pre: HTMLPreElement, code: HTMLElement): string | null 
   return null;
 }
 
-function parseFoldSpec(inner: string): { enabled: boolean; visibleLines: number } {
-  for (const part of inner.split(',')) {
-    const trimmed = part.trim();
-    if (trimmed.toLowerCase() === 'fold') {
-      return { enabled: true, visibleLines: 0 }; // 0 = use default FOLD_VISIBLE_LINES
-    }
-    const m = trimmed.match(/^fold\s*=\s*(\d+)$/i);
-    if (m) {
-      const n = parseInt(m[1], 10);
-      return { enabled: true, visibleLines: isNaN(n) ? 0 : n };
-    }
-  }
-  return { enabled: false, visibleLines: 0 };
-}
-
 // --- diff helpers ---
 
-function isDiffBlock(code: HTMLElement): boolean {
-  return code.classList.contains('language-diff');
-}
-
-// {diff} 修飾子（例: ```python{diff}）を検出する
-function hasDiffModifier(pre: HTMLPreElement, code: HTMLElement): boolean {
-  const spec = findLinenumSpec(pre, code);
-  if (!spec) return false;
-  return spec.split(',').some(part => part.trim().toLowerCase() === 'diff');
-}
-
 function isDiffTarget(pre: HTMLPreElement, code: HTMLElement): boolean {
-  return isDiffBlock(code) || hasDiffModifier(pre, code);
+  if (code.classList.contains('language-diff')) return true;
+  const specStr = findLinenumSpec(pre, code);
+  return specStr ? parseSpec(specStr).diff : false;
 }
 
 function classifyDiffLine(line: string): DiffLineType {
@@ -854,12 +832,8 @@ function extractNewCode(text: string): string {
 function setupDiffView(pre: HTMLPreElement, code: HTMLElement): void {
   if (pre.hasAttribute(NO_DIFF_ATTR)) return;
 
-  const inner = Array.from(pre.children).find(
-    (el): el is HTMLDivElement =>
-      el.tagName === 'DIV' && !el.classList.contains('gpcb-toolbar'),
-  );
-  if (!inner) return;
-  if (!inner.contains(code)) return;
+  const inner = findInnerDiv(pre);
+  if (!inner || !inner.contains(code)) return;
 
   const text = code.textContent ?? '';
   const stripped = text.endsWith('\n') ? text.slice(0, -1) : text;
@@ -871,7 +845,7 @@ function setupDiffView(pre: HTMLPreElement, code: HTMLElement): void {
   let afterLineNum = 1;
   if (showLineNums) {
     const specStr = findLinenumSpec(pre, code);
-    if (specStr) afterLineNum = parseLinenumSpec(specStr).start;
+    if (specStr) afterLineNum = parseSpec(specStr).start;
   }
 
   const linenumsAside = showLineNums ? document.createElement('aside') : null;
@@ -927,13 +901,7 @@ function setupDiffView(pre: HTMLPreElement, code: HTMLElement): void {
     hlOverlay.appendChild(row);
   }
 
-  const codeOuter = document.createElement('div');
-  codeOuter.className = CODE_OUTER_CLASS;
-  const codeWrap = document.createElement('div');
-  codeWrap.className = CODE_WRAP_CLASS;
-  code.parentNode!.insertBefore(codeOuter, code);
-  codeOuter.appendChild(codeWrap);
-  codeWrap.appendChild(code);
+  const { codeOuter, codeWrap } = wrapCodeInScrollContainer(code);
   codeWrap.prepend(hlOverlay);
 
   // DOM 順: [linenum] [diff-gutter] [code-outer]
@@ -975,7 +943,7 @@ function setupFilenameLabel(pre: HTMLPreElement, code: HTMLElement): void {
   const cite = pre.querySelector<HTMLElement>(GROWI_FILENAME_SELECTOR);
   const filename = cite?.textContent?.trim().replace(/\s*\{[^}]*\}\s*$/, '').trim() || null;
   const specStr = findLinenumSpec(pre, code);
-  const specLang = specStr ? parseLinenumSpec(specStr).lang ?? null : null;
+  const specLang = specStr ? parseSpec(specStr).lang ?? null : null;
   const lang = pre.hasAttribute(NO_LANG_ATTR) ? null : (specLang ?? extractLanguage(code));
 
   if (!filename && !lang) return;
@@ -1018,52 +986,40 @@ function computeLineCount(code: HTMLElement): number {
 function setupLineNumbers(pre: HTMLPreElement, code: HTMLElement): void {
   if (pre.hasAttribute(NO_LINENUM_ATTR)) return;
 
-  const inner = Array.from(pre.children).find(
-    (el): el is HTMLDivElement =>
-      el.tagName === 'DIV' && !el.classList.contains('gpcb-toolbar'),
-  );
-  if (!inner) return;
-  if (!inner.contains(code)) return;
+  const inner = findInnerDiv(pre);
+  if (!inner || !inner.contains(code)) return;
 
   const lineCount = computeLineCount(code);
   if (lineCount === 0) return;
 
   const specStr = findLinenumSpec(pre, code);
-  const config: LinenumConfig = specStr
-    ? parseLinenumSpec(specStr)
-    : { start: 1, highlights: new Set() };
+  const spec = specStr ? parseSpec(specStr) : { start: 1, highlights: new Set<number>() };
 
   const aside = document.createElement('aside');
   aside.className = LINENUMS_CLASS;
   aside.setAttribute('aria-hidden', 'true');
   for (let i = 0; i < lineCount; i++) {
-    const displayNum = config.start + i;
+    const displayNum = spec.start + i;
     const span = document.createElement('span');
     span.textContent = String(displayNum);
-    if (config.highlights.has(displayNum)) span.classList.add(LINENUM_HL_CLASS);
+    if (spec.highlights.has(displayNum)) span.classList.add(LINENUM_HL_CLASS);
     aside.appendChild(span);
   }
 
   // <code> を横スクロールコンテナで包む（aside を scroll の外に出して左固定を実現）
-  const codeOuter = document.createElement('div');
-  codeOuter.className = CODE_OUTER_CLASS;
-  const codeWrap = document.createElement('div');
-  codeWrap.className = CODE_WRAP_CLASS;
-  code.parentNode!.insertBefore(codeOuter, code);
-  codeOuter.appendChild(codeWrap);
-  codeWrap.appendChild(code);
+  const { codeOuter, codeWrap } = wrapCodeInScrollContainer(code);
 
   // ハイライト行があればオーバーレイを挿入（flex 等分割で line-height 計測不要）
   let hlOverlay: HTMLDivElement | null = null;
-  if (config.highlights.size > 0) {
+  if (spec.highlights.size > 0) {
     hlOverlay = document.createElement('div');
     hlOverlay.className = HL_OVERLAY_CLASS;
     hlOverlay.setAttribute('aria-hidden', 'true');
     for (let i = 0; i < lineCount; i++) {
-      const displayNum = config.start + i;
+      const displayNum = spec.start + i;
       const row = document.createElement('div');
       row.className = HL_LINE_CLASS;
-      if (config.highlights.has(displayNum)) row.classList.add(HL_LINE_HL_CLASS);
+      if (spec.highlights.has(displayNum)) row.classList.add(HL_LINE_HL_CLASS);
       hlOverlay.appendChild(row);
     }
     codeWrap.prepend(hlOverlay);
@@ -1118,18 +1074,15 @@ function setupFold(pre: HTMLPreElement, code: HTMLElement): void {
   const specStr = findLinenumSpec(pre, code);
   if (!specStr) return;
 
-  const foldSpec = parseFoldSpec(specStr);
-  if (!foldSpec.enabled) return;
+  const spec = parseSpec(specStr);
+  if (!spec.fold) return;
 
   const lineCount = computeLineCount(code);
 
-  const visibleLines = foldSpec.visibleLines > 0 ? foldSpec.visibleLines : FOLD_VISIBLE_LINES;
+  const visibleLines = spec.foldLines > 0 ? spec.foldLines : FOLD_VISIBLE_LINES;
   if (lineCount <= visibleLines) return;
 
-  const inner = Array.from(pre.children).find(
-    (el): el is HTMLDivElement =>
-      el.tagName === 'DIV' && !el.classList.contains('gpcb-toolbar'),
-  );
+  const inner = findInnerDiv(pre);
   if (!inner) return;
 
   const refs = blockRefs.get(pre);
@@ -1195,18 +1148,11 @@ function setupFold(pre: HTMLPreElement, code: HTMLElement): void {
   toggleBtn.appendChild(makeChevronDownIcon());
   refs?.toolbar.prepend(toggleBtn);
 
-  const setToggleBtnCollapsed = () => {
-    toggleBtn.setAttribute('aria-label', 'Expand');
-    toggleBtn.setAttribute('data-gpcb-tooltip', 'Expand');
-    toggleBtn.innerHTML = '';
-    toggleBtn.appendChild(makeChevronDownIcon());
-  };
-
-  const setToggleBtnExpanded = () => {
-    toggleBtn.setAttribute('aria-label', 'Collapse');
-    toggleBtn.setAttribute('data-gpcb-tooltip', 'Collapse');
-    toggleBtn.innerHTML = '';
-    toggleBtn.appendChild(makeChevronUpIcon());
+  const setToggleBtnState = (expanded: boolean) => {
+    const label = expanded ? 'Collapse' : 'Expand';
+    toggleBtn.setAttribute('aria-label', label);
+    toggleBtn.setAttribute('data-gpcb-tooltip', label);
+    toggleBtn.replaceChildren(expanded ? makeChevronUpIcon() : makeChevronDownIcon());
   };
 
   // アニメーション世代カウンタ: doExpand/doCollapse が交互に呼ばれたとき
@@ -1224,7 +1170,7 @@ function setupFold(pre: HTMLPreElement, code: HTMLElement): void {
       overlay.setAttribute('data-expanded', '1');
       expandBtn.style.display = 'none';
       collapseBottomBtn.style.display = '';
-      setToggleBtnExpanded();
+      setToggleBtnState(true);
     };
     inner.addEventListener('transitionend', cleanupExpand, { once: true });
     window.setTimeout(cleanupExpand, 400);
@@ -1237,7 +1183,7 @@ function setupFold(pre: HTMLPreElement, code: HTMLElement): void {
     inner.style.removeProperty('padding-bottom');
     expandBtn.style.display = '';
     collapseBottomBtn.style.display = 'none';
-    setToggleBtnCollapsed();
+    setToggleBtnState(false);
     if (refs?.codeWrap) refs.codeWrap.scrollLeft = 0;
     inner.style.maxHeight = `${inner.scrollHeight}px`;
     requestAnimationFrame(() => {
@@ -1289,7 +1235,7 @@ function enhanceCodeBlock(pre: HTMLPreElement): void {
   const toolbar = document.createElement('div');
   toolbar.className = 'gpcb-toolbar';
 
-  blockRefs.set(pre, { toolbar, filenameLabel: null, lineNums: null, diffGutter: null, codeWrap: null, codeOuter: null, overflowObserver: null, overflowScrollHandler: null, hlOverlay: null, hlScrollHandler: null, copyBtn: null, copyHandler: null, foldInner: null, foldOverlay: null, foldCollapseBtn: null, foldCollapseHandler: null });
+  blockRefs.set(pre, createBlockRefs(toolbar));
 
   setupCopyButton(toolbar, code, pre);
 
@@ -1396,7 +1342,7 @@ export function createCodeBlockExtended(): { mount(): void; unmount(): void } {
     window.addEventListener('hashchange', onNavigation);
     window.addEventListener('growi-pcb-navigate', onNavigation);
 
-    observer = new MutationObserver((mutations) => {
+    function onMutations(mutations: MutationRecord[]): void {
       let shouldScan = false;
       for (const m of mutations) {
         if (m.type === 'childList') {
@@ -1497,7 +1443,9 @@ export function createCodeBlockExtended(): { mount(): void; unmount(): void } {
         observerRafId = null;
         scheduleScan();
       });
-    });
+    }
+
+    observer = new MutationObserver(onMutations);
 
     observer.observe(document.body, {
       childList: true,
